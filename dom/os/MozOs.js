@@ -13,6 +13,7 @@ Cu.import("resource://gre/modules/Services.jsm");
 Cu.import("resource://gre/modules/DOMRequestHelper.jsm");
 Cu.import("resource://gre/modules/osfile.jsm");
 Cu.import("resource://gre/modules/Promise.jsm");
+Cu.import("resource://gre/modules/subprocess.jsm");
 
 /**
  * ==============================================
@@ -38,7 +39,6 @@ MozOs.prototype = {
                             .getInterface(Ci.nsIDOMWindowUtils)
                             .currentInnerWindowID;
     this.initDOMRequestHelper(win, []);
-
     Services.obs.addObserver(this, "inner-window-destroyed", false);
   },
 
@@ -48,13 +48,52 @@ MozOs.prototype = {
     Services.obs.removeObserver(this, "inner-window-destroyed");
   },
 
-  readFile: function mozReadFile(path) {
+  readFile: function(path) {
     let decoder = new TextDecoder();
 
     return this.createPromise((res, rej) => {
       OS.File.read(path).then(array => {
         res(decoder.decode(array));
       }).catch(err => rej(err));
+    });
+  },
+
+  exec: function(path, args) {
+    return this.createPromise((res, rej) => {
+      let stdout = [];
+      let stderr = [];
+
+      try {
+        subprocess.call({
+          command:     path,
+          arguments:   args || [],
+          // environment: [ "XYZ=abc", "MYVAR=def" ],
+          charset: 'UTF-8',
+          // workdir: '/home/foo',
+          //stdin: "some value to write to stdin\nfoobar",
+          // stdin: function(stdin) {
+          //   stdin.write("some value to write to stdin\nfoobar");
+          //   stdin.close();
+          // },
+          stdout: function(data) {
+            stdout.push(data);
+          },
+          stderr: function(data) {
+            stderr.push(data);
+          },
+          done: function(result) {
+            res({
+              exitCode: result.exitCode,
+              stdout: stdout.join(''),
+              stderr: stderr.join('')
+            });
+          },
+          mergeStderr: false
+        });
+      }
+      catch (ex) {
+        rej(ex);
+      }
     });
   }
 };
