@@ -8,4 +8,13 @@
  NavigatorProperty="mozOs"]
 interface MozOs : EventTarget {
   Promise<DOMString> readFile(DOMString path);
+  // hmm is there no DOMStringArray ?
+  Promise<MozOsExecResponse> exec(DOMString path, optional any args);
+};
+
+[JSImplementation="@mozilla.org/b2g-os-exec-response;1"]
+interface MozOsExecResponse {
+  readonly attribute long exitCode;
+  readonly attribute DOMString stdout;
+  readonly attribute DOMString stderr;
 };

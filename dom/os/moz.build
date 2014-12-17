@@ -8,3 +8,8 @@ EXTRA_COMPONENTS += [
     'MozOs.js',
     'Os.manifest',
 ]
+
+EXTRA_JS_MODULES += [
+    'subprocess.jsm',
+    'subprocess_worker_unix.js',
+]
