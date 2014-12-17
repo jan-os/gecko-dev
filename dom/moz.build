@@ -71,6 +71,7 @@ DIRS += [
     'mobileconnection',
     'notification',
     'offline',
+    'os',
     'power',
     'push',
     'quota',

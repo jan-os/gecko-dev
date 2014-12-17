@@ -313,6 +313,7 @@ WEBIDL_FILES = [
     'OfflineAudioCompletionEvent.webidl',
     'OfflineAudioContext.webidl',
     'OfflineResourceList.webidl',
+    'Os.webidl',
     'OscillatorNode.webidl',
     'PaintRequest.webidl',
     'PaintRequestList.webidl',
