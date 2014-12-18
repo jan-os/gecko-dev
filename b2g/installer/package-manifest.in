@@ -608,6 +608,10 @@
 @BINPATH@/components/MozKeyboard.js
 @BINPATH@/components/InputMethod.manifest
 
+; OS API
+@BINPATH@/components/MozOs.js
+@BINPATH@/components/Os.manifest
+
 @BINPATH@/components/EngineeringMode.manifest
 @BINPATH@/components/EngineeringModeAPI.js
 @BINPATH@/components/EngineeringModeService.js
@@ -861,6 +865,8 @@ bin/components/@DLL_PREFIX@nkgnomevfs@DLL_SUFFIX@
 @BINPATH@/components/InterAppCommUIGlue.js
 @BINPATH@/components/SystemMessageGlue.js
 @BINPATH@/components/B2GAppMigrator.js
+@BINPATH@/components/MozOs.js
+@BINPATH@/components/Os.manifest 
 
 #ifndef MOZ_WIDGET_GONK
 @BINPATH@/components/SimulatorScreen.js
