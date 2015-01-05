@@ -1114,29 +1114,18 @@ function subprocess_android(options) {
     const FILE = new ctypes.StructType("FILE").ptr;
     var libc = ctypes.open(options.libc);
 
-    //FILE *popen(const char *command, const char *type);
+    // FILE *popen(const char *command, const char *type);
     var popen = libc.declare("popen",
                               ctypes.default_abi,
                               FILE,
                               ctypes.char.ptr,
                               ctypes.char.ptr);
 
-    //int *pclose(FILE *stream);
+    // int *pclose(FILE *stream);
     var pclose = libc.declare("pclose",
                                ctypes.default_abi,
                                ctypes.int,
                                FILE);
-
-    // size_t fread(void *buffer, size_t size, size_t number, FILE *file);
-    var bufferSize = 1024;
-    var buffer = ctypes.char.array(bufferSize);
-    var fread = libc.declare("fread",
-                             ctypes.default_abi,
-                             ctypes.int,
-                             buffer,
-                             ctypes.int,
-                             ctypes.int,
-                             FILE);
 
     // int fileno(FILE *stream).
     var fileno = libc.declare("fileno",
@@ -1150,7 +1139,9 @@ function subprocess_android(options) {
     let outdata = '';
     createAndroidReader(fd, function(data) {
         outdata += data;
-        options.stdout(data);
+        if (options.stdout) {
+            options.stdout(data);
+        }
     }, function(exitCode) {
         pclose(fileptr);
 
