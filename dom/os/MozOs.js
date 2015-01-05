@@ -2,6 +2,8 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this file,
  * You can obtain one at http://mozilla.org/MPL/2.0/. */
 
+/*global TextDecoder DOMRequestIpcHelper Components XPCOMUtils Services OS */
+
 "use strict";
 
 const Cc = Components.classes;
@@ -48,7 +50,29 @@ MozOs.prototype = {
     Services.obs.removeObserver(this, "inner-window-destroyed");
   },
 
-  readFile: function(path) {
+  readFile: function(path, encoding) {
+    if (encoding === 'utf-8') {
+      return this.readFileUtf8(path);
+    }
+    else if (encoding === 'binary') {
+      return this.readFileBinary(path);
+    }
+    else {
+      return this.createPromise((res, rej) => {
+        rej('Encoding "' + encoding + '" not supported. Try utf-8 or binary.');
+      });
+    }
+  },
+
+  readFileBinary: function(path) {
+    return this.createPromise((res, rej) => {
+      OS.File.read(path).then(array => {
+        res(Cu.cloneInto(array, this._window));
+      }).catch(err => rej(err));
+    });
+  },
+
+  readFileUtf8: function(path) {
     let decoder = new TextDecoder();
 
     return this.createPromise((res, rej) => {
@@ -58,11 +82,24 @@ MozOs.prototype = {
     });
   },
 
+  writeFile: function(path, data, encoding) {
+    return this.createPromise((res, rej) => {
+      OS.File.writeAtomic(path, data, { encoding: encoding, flush: false })
+        .then(() => res())
+        .catch(rej);
+    });
+  },
+
+  removeFile: function(path) {
+    return this.createPromise((res, rej) => {
+      OS.File.remove(path)
+        .then(res)
+        .catch(rej);
+    });
+  },
+
   exec: function(path, args) {
     return this.createPromise((res, rej) => {
-      let stdout = [];
-      let stderr = [];
-
       try {
         subprocess.call({
           command:     path,
@@ -75,17 +112,11 @@ MozOs.prototype = {
           //   stdin.write("some value to write to stdin\nfoobar");
           //   stdin.close();
           // },
-          stdout: function(data) {
-            stdout.push(data);
-          },
-          stderr: function(data) {
-            stderr.push(data);
-          },
           done: function(result) {
             res({
               exitCode: result.exitCode,
-              stdout: stdout.join(''),
-              stderr: stderr.join('')
+              stdout: result.stdout,
+              stderr: result.stderr
             });
           },
           mergeStderr: false

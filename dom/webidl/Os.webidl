@@ -7,9 +7,10 @@
 [JSImplementation="@mozilla.org/b2g-os;1",
  NavigatorProperty="mozOs"]
 interface MozOs : EventTarget {
-  Promise<DOMString> readFile(DOMString path);
-  // hmm is there no DOMStringArray ?
-  Promise<MozOsExecResponse> exec(DOMString path, optional any args);
+  Promise<(DOMString or Uint8Array)> readFile(DOMString path, optional DOMString encoding = "binary");
+  Promise<void> writeFile(DOMString path, (Uint8Array or DOMString) data, optional DOMString encoding = "binary");
+  Promise<MozOsExecResponse> exec(DOMString path, optional sequence<DOMString> args);
+  Promise<void> removeFile(DOMString path);
 };
 
 [JSImplementation="@mozilla.org/b2g-os-exec-response;1"]
