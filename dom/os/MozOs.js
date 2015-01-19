@@ -98,6 +98,42 @@ MozOs.prototype = {
     });
   },
 
+  appendFile: function(path, data, encoding) {
+    return this.createPromise((res, rej) => {
+      let file;
+
+      OS.File.open(path, { write: true, append: true })
+        .then(aFile => file = aFile)
+        .then(() => {
+          if (encoding === 'utf-8') {
+            let encoder = new TextEncoder();
+            return file.write(encoder.encode(data));
+          }
+          else if (encoding === 'binary') {
+            return file.write(data);
+          }
+          else {
+            throw 'Encoding "' + encoding + '" not supported. Try utf-8 or binary.';
+          }
+        })
+        .then(() => file.close())
+        .then(() => res())
+        .catch(err => {
+          if (file) {
+            file.close();
+          }
+          rej(err);
+        });
+    });
+  },
+  
+  createDirectory: function(path, ignoreExisting) {
+    return this.createPromise((res, rej) => {
+      OS.File.makeDir(path, { ignoreExisting: ignoreExisting })
+        .then(res, rej);
+    });
+  },
+
   exec: function(path, args) {
     return this.createPromise((res, rej) => {
       try {
