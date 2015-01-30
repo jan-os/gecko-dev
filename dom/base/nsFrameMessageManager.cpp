@@ -37,9 +37,8 @@
 #include "mozilla/dom/StructuredCloneUtils.h"
 #include "mozilla/dom/ipc/BlobChild.h"
 #include "mozilla/dom/ipc/BlobParent.h"
-#include "JavaScriptChild.h"
-#include "JavaScriptParent.h"
 #include "mozilla/dom/DOMStringList.h"
+#include "mozilla/jsipc/CrossProcessObjectWrappers.h"
 #include "nsPrintfCString.h"
 #include "nsXULAppAPI.h"
 #include <algorithm>
@@ -927,7 +926,7 @@ nsFrameMessageManager::ReceiveMessage(nsISupports* aTarget,
                                       const nsAString& aMessage,
                                       bool aIsSync,
                                       const StructuredCloneData* aCloneData,
-                                      CpowHolder* aCpows,
+                                      mozilla::jsipc::CpowHolder* aCpows,
                                       nsIPrincipal* aPrincipal,
                                       InfallibleTArray<nsString>* aJSONRetVal)
 {
@@ -981,8 +980,7 @@ nsFrameMessageManager::ReceiveMessage(nsISupports* aTarget,
       JS::Rooted<JSObject*> object(cx, wrappedJS->GetJSObject());
 
       // The parameter for the listener function.
-      JS::Rooted<JSObject*> param(cx,
-        JS_NewObject(cx, nullptr, JS::NullPtr(), JS::NullPtr()));
+      JS::Rooted<JSObject*> param(cx, JS_NewPlainObject(cx));
       NS_ENSURE_TRUE(param, NS_ERROR_OUT_OF_MEMORY);
 
       JS::Rooted<JS::Value> targetv(cx);
@@ -998,7 +996,7 @@ nsFrameMessageManager::ReceiveMessage(nsISupports* aTarget,
       }
 
       if (!cpows) {
-        cpows = JS_NewObject(cx, nullptr, JS::NullPtr(), JS::NullPtr());
+        cpows = JS_NewPlainObject(cx);
         if (!cpows) {
           return NS_ERROR_UNEXPECTED;
         }
@@ -1075,7 +1073,7 @@ nsFrameMessageManager::ReceiveMessage(nsISupports* aTarget,
         thisValue.setObject(*object);
       }
 
-      JS::Rooted<JS::Value> rval(cx, JSVAL_VOID);
+      JS::Rooted<JS::Value> rval(cx, JS::UndefinedValue());
       JS::Rooted<JS::Value> argv(cx, JS::ObjectValue(*param));
 
       {
@@ -1855,7 +1853,7 @@ public:
                                   const nsAString& aMessage,
                                   const mozilla::dom::StructuredCloneData& aData,
                                   JS::Handle<JSObject *> aCpows,
-                                  nsIPrincipal* aPrincipal)
+                                  nsIPrincipal* aPrincipal) MOZ_OVERRIDE
   {
     if (!nsFrameMessageManager::sPendingSameProcessAsyncMessages) {
       nsFrameMessageManager::sPendingSameProcessAsyncMessages = new nsTArray<nsCOMPtr<nsIRunnable> >;

@@ -156,7 +156,7 @@ public:
   NS_DECL_ISUPPORTS
 
   NS_METHOD CollectReports(nsIHandleReportCallback* aHandleReport,
-                           nsISupports* aData, bool aAnonymize)
+                           nsISupports* aData, bool aAnonymize) MOZ_OVERRIDE
   {
     int64_t amount = 0;
     nsresult rv = ResidentUniqueDistinguishedAmount(&amount);
@@ -555,7 +555,7 @@ public:
   NS_DECL_ISUPPORTS
 
   NS_METHOD CollectReports(nsIHandleReportCallback* aHandleReport,
-                           nsISupports* aData, bool aAnonymize)
+                           nsISupports* aData, bool aAnonymize) MOZ_OVERRIDE
   {
     int64_t amount;
     nsresult rv = VsizeMaxContiguousDistinguishedAmount(&amount);
@@ -578,7 +578,7 @@ public:
   NS_DECL_ISUPPORTS
 
   NS_METHOD CollectReports(nsIHandleReportCallback* aHandleReport,
-                           nsISupports* aData, bool aAnonymize)
+                           nsISupports* aData, bool aAnonymize) MOZ_OVERRIDE
   {
     int64_t amount;
     nsresult rv = PrivateDistinguishedAmount(&amount);
@@ -922,7 +922,7 @@ public:
   NS_DECL_ISUPPORTS
 
   NS_IMETHOD CollectReports(nsIHandleReportCallback* aHandleReport,
-                            nsISupports* aData, bool aAnonymize)
+                            nsISupports* aData, bool aAnonymize) MOZ_OVERRIDE
   {
     dmd::Sizes sizes;
     dmd::SizeOf(&sizes);
@@ -957,7 +957,7 @@ public:
            "Memory used by DMD's live block table.");
 
     REPORT("explicit/dmd/dead-block-list",
-           sizes.mDeadBlockList,
+           sizes.mDeadBlockTable,
            "Memory used by DMD's dead block list.");
 
 #undef REPORT
@@ -984,7 +984,7 @@ NS_IMPL_ISUPPORTS(nsMemoryReporterManager, nsIMemoryReporterManager)
 NS_IMETHODIMP
 nsMemoryReporterManager::Init()
 {
-#if defined(HAVE_JEMALLOC_STATS) && defined(XP_LINUX)
+#if defined(HAVE_JEMALLOC_STATS) && defined(MOZ_GLUE_IN_PROGRAM)
   if (!jemalloc_stats) {
     return NS_ERROR_FAILURE;
   }

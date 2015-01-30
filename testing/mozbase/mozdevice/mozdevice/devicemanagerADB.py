@@ -378,7 +378,7 @@ class DeviceManagerADB(DeviceManager):
                 envCnt += 1
         if uri != "":
             acmd.append("-d")
-            acmd.append(uri);
+            acmd.append(''.join(['\'',uri, '\'']));
         self._logger.info(acmd)
         self._checkCmd(acmd)
         return outputFile
@@ -620,10 +620,10 @@ class DeviceManagerADB(DeviceManager):
                     self._checkCmd(["shell", "chmod", mask, remoteEntry])
                     self._logger.info("chmod %s" % remoteEntry)
             self._checkCmd(["shell", "chmod", mask, remoteDir])
-            self._logger.info("chmod %s" % remoteDir)
+            self._logger.debug("chmod %s" % remoteDir)
         else:
             self._checkCmd(["shell", "chmod", mask, remoteDir.strip()])
-            self._logger.info("chmod %s" % remoteDir.strip())
+            self._logger.debug("chmod %s" % remoteDir.strip())
 
     def _verifyADB(self):
         """

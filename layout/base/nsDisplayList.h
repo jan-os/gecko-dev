@@ -100,8 +100,8 @@ typedef mozilla::EnumSet<mozilla::gfx::CompositionOp> BlendModeSet;
 
 // All types are defined in nsDisplayItemTypes.h
 #define NS_DISPLAY_DECL_NAME(n, e) \
-  virtual const char* Name() { return n; } \
-  virtual Type GetType() { return e; }
+  virtual const char* Name() MOZ_OVERRIDE { return n; } \
+  virtual Type GetType() MOZ_OVERRIDE { return e; }
 
 /**
  * This manages a display list and is passed as a parameter to
@@ -513,7 +513,7 @@ public:
    */
   void AdjustWindowDraggingRegion(nsIFrame* aFrame);
 
-  const nsRegion& GetWindowDraggingRegion() { return mWindowDraggingRegion; }
+  const nsIntRegion& GetWindowDraggingRegion() { return mWindowDraggingRegion; }
 
   /**
    * Allocate memory in our arena. It will only be freed when this display list
@@ -875,7 +875,7 @@ private:
   nsRect                         mDirtyRect;
   nsRegion                       mWindowExcludeGlassRegion;
   nsRegion                       mWindowOpaqueRegion;
-  nsRegion                       mWindowDraggingRegion;
+  nsIntRegion                    mWindowDraggingRegion;
   // The display item for the Windows window glass background, if any
   nsDisplayItem*                 mGlassDisplayItem;
   nsTArray<DisplayItemClip*>     mDisplayItemClipsToDestroy;
@@ -2685,6 +2685,7 @@ public:
     : nsDisplayItem(aBuilder, aFrame), mOverrideZIndex(0), mHasZIndexOverride(false)
   {
     MOZ_COUNT_CTOR(nsDisplayWrapList);
+    mBaseVisibleRect = mVisibleRect;
   }
   virtual ~nsDisplayWrapList();
   /**
@@ -2693,6 +2694,14 @@ public:
   virtual void UpdateBounds(nsDisplayListBuilder* aBuilder) MOZ_OVERRIDE
   {
     mBounds = mList.GetBounds(aBuilder);
+    // The display list may contain content that's visible outside the visible
+    // rect (i.e. the current dirty rect) passed in when the item was created.
+    // This happens when the dirty rect has been restricted to the visual
+    // overflow rect of a frame for some reason (e.g. when setting up dirty
+    // rects in nsDisplayListBuilder::MarkOutOfFlowFrameForDisplay), but that
+    // frame contains placeholders for out-of-flows that aren't descendants of
+    // the frame.
+    mVisibleRect.UnionRect(mBaseVisibleRect, mList.GetVisibleRect());
   }
   virtual void HitTest(nsDisplayListBuilder* aBuilder, const nsRect& aRect,
                        HitTestState* aState, nsTArray<nsIFrame*> *aOutFrames) MOZ_OVERRIDE;
@@ -2710,7 +2719,7 @@ public:
   {
     aFrames->AppendElements(mMergedFrames);
   }
-  virtual bool ShouldFlattenAway(nsDisplayListBuilder* aBuilder) {
+  virtual bool ShouldFlattenAway(nsDisplayListBuilder* aBuilder) MOZ_OVERRIDE {
     return true;
   }
   virtual bool IsInvalid(nsRect& aRect) MOZ_OVERRIDE
@@ -2787,6 +2796,9 @@ protected:
   // this item's own frame.
   nsTArray<nsIFrame*> mMergedFrames;
   nsRect mBounds;
+  // Visible rect contributed by this display item itself.
+  // Our mVisibleRect may include the visible areas of children.
+  nsRect mBaseVisibleRect;
   int32_t mOverrideZIndex;
   bool mHasZIndexOverride;
 };
@@ -2943,7 +2955,8 @@ public:
     GENERATE_SUBDOC_INVALIDATIONS = 0x01,
     VERTICAL_SCROLLBAR = 0x02,
     HORIZONTAL_SCROLLBAR = 0x04,
-    GENERATE_SCROLLABLE_LAYER = 0x08
+    GENERATE_SCROLLABLE_LAYER = 0x08,
+    SCROLLBAR_CONTAINER = 0x10
   };
 
   /**
@@ -3197,6 +3210,10 @@ public:
 
   virtual nsRect GetBounds(nsDisplayListBuilder* aBuilder, bool* aSnap) MOZ_OVERRIDE;
 
+  virtual already_AddRefed<Layer> BuildLayer(nsDisplayListBuilder* aBuilder,
+                                             LayerManager* aManager,
+                                             const ContainerLayerParameters& aContainerParameters) MOZ_OVERRIDE;
+
   virtual LayerState GetLayerState(nsDisplayListBuilder* aBuilder,
                                    LayerManager* aManager,
                                    const ContainerLayerParameters& aParameters) MOZ_OVERRIDE;
@@ -3206,6 +3223,11 @@ public:
                           nsDisplayItem* aItem) MOZ_OVERRIDE;
 
   virtual bool ShouldFlattenAway(nsDisplayListBuilder* aBuilder) MOZ_OVERRIDE;
+
+  void MarkHoisted() { mHoisted = true; }
+
+private:
+  bool mHoisted;
 };
 
 /**

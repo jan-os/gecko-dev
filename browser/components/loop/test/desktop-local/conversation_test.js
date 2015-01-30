@@ -53,7 +53,9 @@ describe("loop.conversation", function() {
 
     fakeWindow = {
       navigator: { mozLoop: navigator.mozLoop },
-      close: sandbox.stub(),
+      close: sinon.stub(),
+      addEventListener: function() {},
+      removeEventListener: function() {}
     };
     loop.shared.mixins.setRootObject(fakeWindow);
 
@@ -73,7 +75,7 @@ describe("loop.conversation", function() {
 
   describe("#init", function() {
     beforeEach(function() {
-      sandbox.stub(React, "renderComponent");
+      sandbox.stub(React, "render");
       sandbox.stub(document.mozL10n, "initialize");
 
       sandbox.stub(loop.shared.models.ConversationModel.prototype,
@@ -107,10 +109,10 @@ describe("loop.conversation", function() {
     it("should create the AppControllerView", function() {
       loop.conversation.init();
 
-      sinon.assert.calledOnce(React.renderComponent);
-      sinon.assert.calledWith(React.renderComponent,
+      sinon.assert.calledOnce(React.render);
+      sinon.assert.calledWith(React.render,
         sinon.match(function(value) {
-          return TestUtils.isDescriptorOfType(value,
+          return TestUtils.isCompositeComponentElement(value,
             loop.conversation.AppControllerView);
       }));
     });
@@ -132,7 +134,7 @@ describe("loop.conversation", function() {
 
     function mountTestComponent() {
       return TestUtils.renderIntoDocument(
-        loop.conversation.AppControllerView({
+        React.createElement(loop.conversation.AppControllerView, {
           client: client,
           conversation: conversation,
           roomStore: roomStore,

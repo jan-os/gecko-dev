@@ -1069,7 +1069,7 @@ TypeAnalyzer::adjustPhiInputs(MPhi *phi)
             // the original box.
             phi->replaceOperand(i, in->toUnbox()->input());
         } else {
-            MDefinition *box = BoxInputsPolicy::alwaysBoxAt(alloc(), in->block()->lastIns(), in);
+            MDefinition *box = AlwaysBoxAt(alloc(), in->block()->lastIns(), in);
             phi->replaceOperand(i, box);
         }
     }
@@ -2065,7 +2065,6 @@ IsResumableMIRType(MIRType type)
       case MIRType_Pointer:
       case MIRType_Shape:
       case MIRType_TypeObject:
-      case MIRType_ForkJoinContext:
       case MIRType_Float32x4:
       case MIRType_Int32x4:
       case MIRType_Doublex2:
@@ -3063,7 +3062,7 @@ jit::AnalyzeNewScriptDefiniteProperties(JSContext *cx, JSFunction *fun,
 
     CompileInfo info(script, fun,
                      /* osrPc = */ nullptr, /* constructing = */ false,
-                     DefinitePropertiesAnalysis,
+                     Analysis_DefiniteProperties,
                      script->needsArgsObj(),
                      inlineScriptTree);
 
@@ -3291,7 +3290,7 @@ jit::AnalyzeArgumentsUsage(JSContext *cx, JSScript *scriptArg)
         return false;
     CompileInfo info(script, script->functionNonDelazifying(),
                      /* osrPc = */ nullptr, /* constructing = */ false,
-                     ArgumentsUsageAnalysis,
+                     Analysis_ArgumentsUsage,
                      /* needsArgsObj = */ true,
                      inlineScriptTree);
 
@@ -3525,6 +3524,13 @@ jit::MakeLoopsContiguous(MIRGraph &graph)
         // If the loop isn't a loop, don't try to optimize it.
         if (numMarked == 0)
             continue;
+
+        // If there's an OSR block entering the loop in the middle, it's tricky,
+        // so don't try to handle it, for now.
+        if (canOsr) {
+            UnmarkLoopBlocks(graph, header);
+            continue;
+        }
 
         // Move all blocks between header and backedge that aren't marked to
         // the end of the loop, making the loop itself contiguous.

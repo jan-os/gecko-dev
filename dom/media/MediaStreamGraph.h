@@ -240,6 +240,7 @@ class AudioNodeEngine;
 class AudioNodeExternalInputStream;
 class AudioNodeStream;
 struct AudioChunk;
+class CameraPreviewMediaStream;
 
 /**
  * A stream of synchronized audio and video data. All (not blocked) streams
@@ -418,6 +419,7 @@ public:
   virtual SourceMediaStream* AsSourceStream() { return nullptr; }
   virtual ProcessedMediaStream* AsProcessedStream() { return nullptr; }
   virtual AudioNodeStream* AsAudioNodeStream() { return nullptr; }
+  virtual CameraPreviewMediaStream* AsCameraPreviewStream() { return nullptr; }
 
   // media graph thread only
   void Init();
@@ -693,10 +695,10 @@ public:
     mNeedsMixing(false)
   {}
 
-  virtual SourceMediaStream* AsSourceStream() { return this; }
+  virtual SourceMediaStream* AsSourceStream() MOZ_OVERRIDE { return this; }
 
   // Media graph thread only
-  virtual void DestroyImpl();
+  virtual void DestroyImpl() MOZ_OVERRIDE;
 
   // Call these on any thread.
   /**
@@ -1069,7 +1071,7 @@ public:
    */
   void SetAutofinish(bool aAutofinish);
 
-  virtual ProcessedMediaStream* AsProcessedStream() { return this; }
+  virtual ProcessedMediaStream* AsProcessedStream() MOZ_OVERRIDE { return this; }
 
   friend class MediaStreamGraphImpl;
 
@@ -1087,7 +1089,7 @@ public:
   {
     return mInputs.Length();
   }
-  virtual void DestroyImpl();
+  virtual void DestroyImpl() MOZ_OVERRIDE;
   /**
    * This gets called after we've computed the blocking states for all
    * streams (mBlocked is up to date up to mStateComputedTime).

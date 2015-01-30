@@ -62,7 +62,12 @@ HelperAppLauncherDialog.prototype = {
     // For all other URIs, try to resolve them to an inner URI, and check that.
     if (!alreadyResolved) {
       let ioSvc = Cc["@mozilla.org/network/io-service;1"].getService(Components.interfaces.nsIIOService);
-      let innerURI = ioSvc.newChannelFromURI(url).URI;
+      let innerURI = ioSvc.newChannelFromURI2(url,
+                                              null,      // aLoadingNode
+                                              Services.scriptSecurityManager.getSystemPrincipal(),
+                                              null,      // aTriggeringPrincipal
+                                              Ci.nsILoadInfo.SEC_NORMAL,
+                                              Ci.nsIContentPolicy.TYPE_OTHER).URI;
       if (!url.equals(innerURI)) {
         return this._canDownload(innerURI, true);
       }
@@ -229,11 +234,6 @@ HelperAppLauncherDialog.prototype = {
       Services.prefs.setCharPref(this._getPrefName(mime), app.packageName);
     else
       Services.prefs.clearUserPref(this._getPrefName(mime));
-  },
-
-  promptForSaveToFile: function () {
-    throw new Components.Exception("Async version must be used",
-                                   Cr.NS_ERROR_NOT_AVAILABLE);
   },
 
   promptForSaveToFileAsync: function (aLauncher, aContext, aDefaultFile,

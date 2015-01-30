@@ -516,7 +516,7 @@ let SnapshotsListView = Heritage.extend(WidgetMethods, {
 
       // Show a throbber and a "Saving…" label if serializing isn't immediate.
       setNamedTimeout("call-list-save", CALLS_LIST_SLOW_SAVE_DELAY, () => {
-        footer.setAttribute("saving", "");
+        footer.classList.add("devtools-throbber");
         save.setAttribute("disabled", "true");
         save.setAttribute("value", L10N.getStr("snapshotsList.savingLabel"));
       });
@@ -529,7 +529,7 @@ let SnapshotsListView = Heritage.extend(WidgetMethods, {
             console.error("Could not save recorded animation frame snapshot file.");
           }
           clearNamedTimeout("call-list-save");
-          footer.removeAttribute("saving");
+          footer.classList.remove("devtools-throbber");
           save.removeAttribute("disabled");
           save.setAttribute("value", L10N.getStr("snapshotsList.saveLabel"));
         });
@@ -701,7 +701,7 @@ let CallsListView = Heritage.extend(WidgetMethods, {
     let dimensionsNode = $("#screenshot-dimensions");
     let actualWidth = (width / scaling) | 0;
     let actualHeight = (height / scaling) | 0;
-    dimensionsNode.setAttribute("value", actualWidth + " x " + actualHeight);
+    dimensionsNode.setAttribute("value", actualWidth + " \u00D7 " + actualHeight);
 
     window.emit(EVENTS.CALL_SCREENSHOT_DISPLAYED);
   },
@@ -822,7 +822,7 @@ let CallsListView = Heritage.extend(WidgetMethods, {
       frameSnapshot.generateScreenshotFor(functionCall).then(screenshot => {
         this.showScreenshot(screenshot);
         this.highlightedThumbnail = screenshot.index;
-      });
+      }).catch(Cu.reportError);
     });
   },
 

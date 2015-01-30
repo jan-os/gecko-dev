@@ -12,6 +12,8 @@ describe("loop.conversationViews", function () {
   var fakeMozLoop, fakeWindow;
 
   var CALL_STATES = loop.store.CALL_STATES;
+  var REST_ERRNOS = loop.shared.utils.REST_ERRNOS;
+  var WEBSOCKET_REASONS = loop.shared.utils.WEBSOCKET_REASONS;
 
   // XXX refactor to Just Work with "sandbox.stubComponent" or else
   // just pass in the sandbox and put somewhere generally usable
@@ -92,7 +94,9 @@ describe("loop.conversationViews", function () {
 
     fakeWindow = {
       navigator: { mozLoop: fakeMozLoop },
-      close: sandbox.stub(),
+      close: sinon.stub(),
+      addEventListener: function() {},
+      removeEventListener: function() {}
     };
     loop.shared.mixins.setRootObject(fakeWindow);
 
@@ -109,7 +113,7 @@ describe("loop.conversationViews", function () {
   describe("CallIdentifierView", function() {
     function mountTestComponent(props) {
       return TestUtils.renderIntoDocument(
-        loop.conversationViews.CallIdentifierView(props));
+        React.createElement(loop.conversationViews.CallIdentifierView, props));
     }
 
     it("should set display the peer identifer", function() {
@@ -170,7 +174,7 @@ describe("loop.conversationViews", function () {
   describe("ConversationDetailView", function() {
     function mountTestComponent(props) {
       return TestUtils.renderIntoDocument(
-        loop.conversationViews.ConversationDetailView(props));
+        React.createElement(loop.conversationViews.ConversationDetailView, props));
     }
 
     it("should set the document title to the calledId", function() {
@@ -192,7 +196,7 @@ describe("loop.conversationViews", function () {
   describe("PendingConversationView", function() {
     function mountTestComponent(props) {
       return TestUtils.renderIntoDocument(
-        loop.conversationViews.PendingConversationView(props));
+        React.createElement(loop.conversationViews.PendingConversationView, props));
     }
 
     it("should set display connecting string when the state is not alerting",
@@ -277,7 +281,7 @@ describe("loop.conversationViews", function () {
     function mountTestComponent(options) {
       options = options || {};
       return TestUtils.renderIntoDocument(
-        loop.conversationViews.CallFailedView({
+        React.createElement(loop.conversationViews.CallFailedView, {
           dispatcher: dispatcher,
           store: store,
           contact: options.contact
@@ -412,12 +416,77 @@ describe("loop.conversationViews", function () {
       sinon.assert.calledOnce(fakeAudio.play);
       expect(fakeAudio.loop).to.equal(false);
     });
+
+    it("should show 'something went wrong' when the reason is WEBSOCKET_REASONS.MEDIA_FAIL",
+      function () {
+        store.setStoreState({callStateReason: WEBSOCKET_REASONS.MEDIA_FAIL});
+
+        view = mountTestComponent({contact: contact});
+
+        sinon.assert.calledWith(document.mozL10n.get, "generic_failure_title");
+      });
+
+    it("should show 'contact unavailable' when the reason is WEBSOCKET_REASONS.REJECT",
+      function () {
+        store.setStoreState({callStateReason: WEBSOCKET_REASONS.REJECT});
+
+        view = mountTestComponent({contact: contact});
+
+        sinon.assert.calledWithExactly(document.mozL10n.get,
+          "contact_unavailable_title",
+          {contactName: loop.conversationViews._getContactDisplayName(contact)});
+      });
+
+    it("should show 'contact unavailable' when the reason is WEBSOCKET_REASONS.BUSY",
+      function () {
+        store.setStoreState({callStateReason: WEBSOCKET_REASONS.BUSY});
+
+        view = mountTestComponent({contact: contact});
+
+        sinon.assert.calledWithExactly(document.mozL10n.get,
+          "contact_unavailable_title",
+          {contactName: loop.conversationViews._getContactDisplayName(contact)});
+      });
+
+    it("should show 'something went wrong' when the reason is 'setup'",
+      function () {
+        store.setStoreState({callStateReason: "setup"});
+
+        view = mountTestComponent({contact: contact});
+
+        sinon.assert.calledWithExactly(document.mozL10n.get,
+          "generic_failure_title");
+      });
+
+    it("should show 'contact unavailable' when the reason is REST_ERRNOS.USER_UNAVAILABLE",
+      function () {
+        store.setStoreState({callStateReason: REST_ERRNOS.USER_UNAVAILABLE});
+
+        view = mountTestComponent({contact: contact});
+
+        sinon.assert.calledWithExactly(document.mozL10n.get,
+          "contact_unavailable_title",
+          {contactName: loop.conversationViews._getContactDisplayName(contact)});
+      });
+
+    it("should display a generic contact unavailable msg when the reason is" +
+       " WEBSOCKET_REASONS.BUSY and no display name is available", function() {
+        store.setStoreState({callStateReason: WEBSOCKET_REASONS.BUSY});
+        var phoneOnlyContact = {
+          tel: [{"pref": true, type: "work", value: ""}]
+        };
+
+        view = mountTestComponent({contact: phoneOnlyContact});
+
+        sinon.assert.calledWith(document.mozL10n.get,
+          "generic_contact_unavailable_title");
+    });
   });
 
   describe("OngoingConversationView", function() {
     function mountTestComponent(props) {
       return TestUtils.renderIntoDocument(
-        loop.conversationViews.OngoingConversationView(props));
+        React.createElement(loop.conversationViews.OngoingConversationView, props));
     }
 
     it("should dispatch a setupStreamElements action when the view is created",
@@ -511,10 +580,9 @@ describe("loop.conversationViews", function () {
 
     function mountTestComponent() {
       return TestUtils.renderIntoDocument(
-        loop.conversationViews.OutgoingConversationView({
+        React.createElement(loop.conversationViews.OutgoingConversationView, {
           dispatcher: dispatcher,
-          store: store,
-          feedbackStore: feedbackStore
+          store: store
         }));
     }
 
@@ -531,7 +599,10 @@ describe("loop.conversationViews", function () {
 
     it("should render the CallFailedView when the call state is 'terminated'",
       function() {
-        store.setStoreState({callState: CALL_STATES.TERMINATED});
+        store.setStoreState({
+          callState: CALL_STATES.TERMINATED,
+          contact: contact
+        });
 
         view = mountTestComponent();
 
@@ -613,12 +684,11 @@ describe("loop.conversationViews", function () {
 
     function mountTestComponent() {
       return TestUtils.renderIntoDocument(
-        loop.conversationViews.IncomingConversationView({
+        React.createElement(loop.conversationViews.IncomingConversationView, {
           client: client,
           conversation: conversation,
           sdk: {},
-          conversationAppStore: conversationAppStore,
-          feedbackStore: feedbackStore
+          conversationAppStore: conversationAppStore
         }));
     }
 
@@ -788,7 +858,7 @@ describe("loop.conversationViews", function () {
               promise.then(function() {
                 icView._websocket.trigger("progress", {
                   state: "terminated",
-                  reason: "timeout"
+                  reason: WEBSOCKET_REASONS.TIMEOUT
                 }, "alerting");
 
                 sinon.assert.calledOnce(navigator.mozLoop.stopAlerting);
@@ -800,7 +870,7 @@ describe("loop.conversationViews", function () {
               promise.then(function() {
                 icView._websocket.trigger("progress", {
                   state: "terminated",
-                  reason: "closed"
+                  reason: WEBSOCKET_REASONS.CLOSED
                 }, "alerting");
 
                 sinon.assert.calledOnce(icView._websocket.close);
@@ -812,7 +882,7 @@ describe("loop.conversationViews", function () {
               promise.then(function() {
                 icView._websocket.trigger("progress", {
                   state: "terminated",
-                  reason: "answered-elsewhere"
+                  reason: WEBSOCKET_REASONS.ANSWERED_ELSEWHERE
                 }, "alerting");
 
                 sandbox.clock.tick(1);
@@ -831,7 +901,7 @@ describe("loop.conversationViews", function () {
                 promise.then(function() {
                   icView._websocket.trigger("progress", {
                     state: "terminated",
-                    reason: "media-fail"
+                    reason: WEBSOCKET_REASONS.MEDIA_FAIL
                   }, "connecting");
 
                   expect(icView.state.callStatus).eql("end");
@@ -843,7 +913,7 @@ describe("loop.conversationViews", function () {
                 promise.then(function() {
                   icView._websocket.trigger("progress", {
                     state: "terminated",
-                    reason: "media-fail"
+                    reason: WEBSOCKET_REASONS.MEDIA_FAIL
                   }, "connecting");
 
                   sinon.assert.calledOnce(navigator.mozLoop.stopAlerting);
@@ -1149,7 +1219,7 @@ describe("loop.conversationViews", function () {
       sandbox.stub(window, "Audio").returns(fakeAudio);
 
       view = TestUtils.renderIntoDocument(
-        loop.conversationViews.IncomingCallView({
+        React.createElement(loop.conversationViews.IncomingCallView, {
           model: model,
           video: true
         }));
@@ -1158,7 +1228,7 @@ describe("loop.conversationViews", function () {
     describe("default answer mode", function() {
       it("should display video as primary answer mode", function() {
         view = TestUtils.renderIntoDocument(
-          loop.conversationViews.IncomingCallView({
+          React.createElement(loop.conversationViews.IncomingCallView, {
             model: model,
             video: true
           }));
@@ -1170,7 +1240,7 @@ describe("loop.conversationViews", function () {
 
       it("should display audio as primary answer mode", function() {
         view = TestUtils.renderIntoDocument(
-          loop.conversationViews.IncomingCallView({
+          React.createElement(loop.conversationViews.IncomingCallView, {
             model: model,
             video: false
           }));
@@ -1182,7 +1252,7 @@ describe("loop.conversationViews", function () {
 
       it("should accept call with video", function() {
         view = TestUtils.renderIntoDocument(
-          loop.conversationViews.IncomingCallView({
+          React.createElement(loop.conversationViews.IncomingCallView, {
             model: model,
             video: true
           }));
@@ -1199,7 +1269,7 @@ describe("loop.conversationViews", function () {
 
       it("should accept call with audio", function() {
         view = TestUtils.renderIntoDocument(
-          loop.conversationViews.IncomingCallView({
+          React.createElement(loop.conversationViews.IncomingCallView, {
             model: model,
             video: false
           }));
@@ -1216,38 +1286,38 @@ describe("loop.conversationViews", function () {
 
       it("should accept call with video when clicking on secondary btn",
          function() {
-           view = TestUtils.renderIntoDocument(
-             loop.conversationViews.IncomingCallView({
-               model: model,
-               video: false
-             }));
-           var secondaryBtn = view.getDOMNode()
-           .querySelector('.fx-embedded-btn-video-small');
+          view = TestUtils.renderIntoDocument(
+            React.createElement(loop.conversationViews.IncomingCallView, {
+              model: model,
+              video: false
+            }));
+          var secondaryBtn = view.getDOMNode()
+          .querySelector('.fx-embedded-btn-video-small');
 
-           React.addons.TestUtils.Simulate.click(secondaryBtn);
+          React.addons.TestUtils.Simulate.click(secondaryBtn);
 
-           sinon.assert.calledOnce(model.set);
-           sinon.assert.calledWithExactly(model.set, "selectedCallType", "audio-video");
-           sinon.assert.calledOnce(model.trigger);
-           sinon.assert.calledWithExactly(model.trigger, "accept");
+          sinon.assert.calledOnce(model.set);
+          sinon.assert.calledWithExactly(model.set, "selectedCallType", "audio-video");
+          sinon.assert.calledOnce(model.trigger);
+          sinon.assert.calledWithExactly(model.trigger, "accept");
          });
 
       it("should accept call with audio when clicking on secondary btn",
          function() {
-           view = TestUtils.renderIntoDocument(
-             loop.conversationViews.IncomingCallView({
-               model: model,
-               video: true
-             }));
-           var secondaryBtn = view.getDOMNode()
-           .querySelector('.fx-embedded-btn-audio-small');
+          view = TestUtils.renderIntoDocument(
+            React.createElement(loop.conversationViews.IncomingCallView, {
+              model: model,
+              video: true
+            }));
+          var secondaryBtn = view.getDOMNode()
+          .querySelector('.fx-embedded-btn-audio-small');
 
-           React.addons.TestUtils.Simulate.click(secondaryBtn);
+          React.addons.TestUtils.Simulate.click(secondaryBtn);
 
-           sinon.assert.calledOnce(model.set);
-           sinon.assert.calledWithExactly(model.set, "selectedCallType", "audio");
-           sinon.assert.calledOnce(model.trigger);
-           sinon.assert.calledWithExactly(model.trigger, "accept");
+          sinon.assert.calledOnce(model.set);
+          sinon.assert.calledWithExactly(model.set, "selectedCallType", "audio");
+          sinon.assert.calledOnce(model.trigger);
+          sinon.assert.calledWithExactly(model.trigger, "accept");
          });
     });
 
@@ -1308,10 +1378,9 @@ describe("loop.conversationViews", function () {
       sandbox.stub(window, "Audio").returns(fakeAudio);
 
       view = TestUtils.renderIntoDocument(
-        loop.conversationViews.GenericFailureView({
+        React.createElement(loop.conversationViews.GenericFailureView, {
           cancelCall: function() {}
-        })
-      );
+        }));
     });
 
     it("should play a failure sound, once", function() {

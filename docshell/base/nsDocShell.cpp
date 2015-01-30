@@ -87,9 +87,6 @@
 #include "nsSHistory.h"
 #include "nsDocShellEditorData.h"
 #include "GeckoProfiler.h"
-#ifdef MOZ_ENABLE_PROFILER_SPS
-#include "ProfilerMarkers.h"
-#endif
 
 // Helper Classes
 #include "nsError.h"
@@ -195,6 +192,7 @@
 #include "mozilla/dom/EncodingUtils.h"
 #include "mozilla/dom/ScriptSettings.h"
 #include "mozilla/dom/URLSearchParams.h"
+#include "nsPerformance.h"
 
 #ifdef MOZ_TOOLKIT_SEARCH
 #include "nsIBrowserSearchService.h"
@@ -838,6 +836,7 @@ nsDocShell::nsDocShell():
     mAllowKeywordFixup(false),
     mIsOffScreenBrowser(false),
     mIsActive(true),
+    mIsPrerendered(false),
     mIsAppTab(false),
     mUseGlobalHistory(false),
     mInPrivateBrowsing(false),
@@ -858,6 +857,7 @@ nsDocShell::nsDocShell():
     mInvisible(false),
     mHasLoadedNonBlankURI(false),
     mDefaultLoadFlags(nsIRequest::LOAD_NORMAL),
+    mBlankTiming(false),
     mFrameType(eFrameTypeRegular),
     mOwnOrContainingAppId(nsIScriptSecurityManager::UNKNOWN_APP_ID),
     mParentCharsetSource(0),
@@ -1769,11 +1769,22 @@ nsDocShell::FirePageHideNotification(bool aIsUnload)
 void
 nsDocShell::MaybeInitTiming()
 {
-    if (mTiming) {
+    if (mTiming && !mBlankTiming) {
         return;
     }
 
-    mTiming = new nsDOMNavigationTiming();
+    if (mScriptGlobal && mBlankTiming) {
+        nsPIDOMWindow* innerWin = mScriptGlobal->GetCurrentInnerWindow();
+        if (innerWin && innerWin->GetPerformance()) {
+            mTiming = innerWin->GetPerformance()->GetDOMTiming();
+            mBlankTiming = false;
+        }
+    }
+
+    if (!mTiming) {
+      mTiming = new nsDOMNavigationTiming();
+    }
+
     mTiming->NotifyNavigationStart();
 }
 
@@ -2845,7 +2856,6 @@ unsigned long nsDocShell::gProfileTimelineRecordingsCount = 0;
 NS_IMETHODIMP
 nsDocShell::SetRecordProfileTimelineMarkers(bool aValue)
 {
-#ifdef MOZ_ENABLE_PROFILER_SPS
   bool currentValue = nsIDocShell::GetRecordProfileTimelineMarkers();
   if (currentValue != aValue) {
     if (aValue) {
@@ -2861,9 +2871,6 @@ nsDocShell::SetRecordProfileTimelineMarkers(bool aValue)
   }
 
   return NS_OK;
-#else
-  return NS_ERROR_FAILURE;
-#endif
 }
 
 NS_IMETHODIMP
@@ -2877,7 +2884,6 @@ nsresult
 nsDocShell::PopProfileTimelineMarkers(JSContext* aCx,
                           JS::MutableHandle<JS::Value> aProfileTimelineMarkers)
 {
-#ifdef MOZ_ENABLE_PROFILER_SPS
   // Looping over all markers gathered so far at the docShell level, whenever a
   // START marker is found, look for the corresponding END marker and build a
   // {name,start,end} JS object.
@@ -2979,9 +2985,6 @@ nsDocShell::PopProfileTimelineMarkers(JSContext* aCx,
   }
 
   return NS_OK;
-#else
-  return NS_ERROR_FAILURE;
-#endif
 }
 
 nsresult
@@ -2996,33 +2999,27 @@ void
 nsDocShell::AddProfileTimelineMarker(const char* aName,
                                      TracingMetadata aMetaData)
 {
-#ifdef MOZ_ENABLE_PROFILER_SPS
   if (mProfileTimelineRecording) {
     TimelineMarker* marker = new TimelineMarker(this, aName, aMetaData);
     mProfileTimelineMarkers.AppendElement(marker);
   }
-#endif
 }
 
 void
 nsDocShell::AddProfileTimelineMarker(UniquePtr<TimelineMarker>& aMarker)
 {
-#ifdef MOZ_ENABLE_PROFILER_SPS
   if (mProfileTimelineRecording) {
     mProfileTimelineMarkers.AppendElement(aMarker.release());
   }
-#endif
 }
 
 void
 nsDocShell::ClearProfileTimelineMarkers()
 {
-#ifdef MOZ_ENABLE_PROFILER_SPS
   for (uint32_t i = 0; i < mProfileTimelineMarkers.Length(); ++i) {
     delete mProfileTimelineMarkers[i];
   }
   mProfileTimelineMarkers.Clear();
-#endif
 }
 
 nsIDOMStorageManager*
@@ -3385,6 +3382,9 @@ nsDocShell::SetDocLoaderParent(nsDocLoader * aParent)
         if (NS_SUCCEEDED(parentAsDocShell->GetIsActive(&value)))
         {
             SetIsActive(value);
+        }
+        if (parentAsDocShell->GetIsPrerendered()) {
+          SetIsPrerendered(true);
         }
         if (NS_FAILED(parentAsDocShell->GetAllowDNSPrefetch(&value))) {
             value = false;
@@ -5143,6 +5143,15 @@ nsDocShell::DisplayLoadError(nsresult aError, nsIURI *aURI,
     // Display the error as a page or an alert prompt
     NS_ENSURE_FALSE(messageStr.IsEmpty(), NS_ERROR_FAILURE);
 
+    if (NS_ERROR_NET_INTERRUPT == aError || NS_ERROR_NET_RESET == aError) {
+        bool isSecureURI = false;
+        rv = aURI->SchemeIs("https", &isSecureURI);
+        if (NS_SUCCEEDED(rv) && isSecureURI) {
+            // Maybe TLS intolerant. Treat this as an SSL error.
+            error.AssignLiteral("nssFailure2");
+        }
+    }
+
     if (UseErrorPages()) {
         // Display an error page
         LoadErrorPage(aURI, aURL, errorPage.get(), error.get(),
@@ -5776,8 +5785,7 @@ nsDocShell::SetPosition(int32_t x, int32_t y)
 NS_IMETHODIMP
 nsDocShell::GetPosition(int32_t * aX, int32_t * aY)
 {
-    int32_t dummyHolder;
-    return GetPositionAndSize(aX, aY, &dummyHolder, &dummyHolder);
+    return GetPositionAndSize(aX, aY, nullptr, nullptr);
 }
 
 NS_IMETHODIMP
@@ -5791,8 +5799,7 @@ nsDocShell::SetSize(int32_t aCX, int32_t aCY, bool aRepaint)
 NS_IMETHODIMP
 nsDocShell::GetSize(int32_t * aCX, int32_t * aCY)
 {
-    int32_t dummyHolder;
-    return GetPositionAndSize(&dummyHolder, &dummyHolder, aCX, aCY);
+    return GetPositionAndSize(nullptr, nullptr, aCX, aCY);
 }
 
 NS_IMETHODIMP
@@ -6049,6 +6056,22 @@ NS_IMETHODIMP
 nsDocShell::GetIsActive(bool *aIsActive)
 {
     *aIsActive = mIsActive;
+    return NS_OK;
+}
+
+NS_IMETHODIMP
+nsDocShell::SetIsPrerendered(bool aPrerendered)
+{
+    MOZ_ASSERT(!aPrerendered || !mIsPrerendered,
+               "SetIsPrerendered(true) called on already prerendered docshell");
+    mIsPrerendered = aPrerendered;
+    return NS_OK;
+}
+
+NS_IMETHODIMP
+nsDocShell::GetIsPrerendered(bool *aIsPrerendered)
+{
+    *aIsPrerendered = mIsPrerendered;
     return NS_OK;
 }
 
@@ -7847,6 +7870,7 @@ nsDocShell::CreateAboutBlankContentViewer(nsIPrincipal* aPrincipal,
   // have one before entering this function.
   if (!hadTiming) {
     mTiming = nullptr;
+    mBlankTiming = true;
   }
 
   return rv;
@@ -8190,14 +8214,6 @@ nsDocShell::RestorePresentation(nsISHEntry *aSHEntry, bool *aRestoring)
 
     SetHistoryEntry(&mLSHE, aSHEntry);
 
-    // Add the request to our load group.  We do this before swapping out
-    // the content viewers so that consumers of STATE_START can access
-    // the old document.  We only deal with the toplevel load at this time --
-    // to be consistent with normal document loading, subframes cannot start
-    // loading until after data arrives, which is after STATE_START completes.
-
-    BeginRestore(viewer, true);
-
     // Post an event that will remove the request after we've returned
     // to the event loop.  This mimics the way it is called by nsIChannel
     // implementations.
@@ -8219,10 +8235,40 @@ nsDocShell::RestorePresentation(nsISHEntry *aSHEntry, bool *aRestoring)
     return rv;
 }
 
+namespace {
+class MOZ_STACK_CLASS PresentationEventForgetter
+{
+public:
+  explicit PresentationEventForgetter(
+    nsRevocableEventPtr<nsDocShell::RestorePresentationEvent>& aRestorePresentationEvent)
+  : mRestorePresentationEvent(aRestorePresentationEvent)
+  , mEvent(aRestorePresentationEvent.get())
+  {
+  }
+
+  ~PresentationEventForgetter()
+  {
+    Forget();
+  }
+
+  void Forget()
+  {
+    if (mRestorePresentationEvent.get() == mEvent) {
+      mRestorePresentationEvent.Forget();
+      mEvent = nullptr;
+    }
+  }
+private:
+  nsRevocableEventPtr<nsDocShell::RestorePresentationEvent>& mRestorePresentationEvent;
+  nsRefPtr<nsDocShell::RestorePresentationEvent> mEvent;
+};
+}
+
 nsresult
 nsDocShell::RestoreFromHistory()
 {
-    mRestorePresentationEvent.Forget();
+    MOZ_ASSERT(mRestorePresentationEvent.IsPending());
+    PresentationEventForgetter forgetter(mRestorePresentationEvent);
 
     // This section of code follows the same ordering as CreateContentViewer.
     if (!mLSHE)
@@ -8275,6 +8321,24 @@ nsDocShell::RestoreFromHistory()
     // something else was loaded.  Don't finish restoring.
     if (mLSHE != origLSHE)
       return NS_OK;
+
+    // Add the request to our load group.  We do this before swapping out
+    // the content viewers so that consumers of STATE_START can access
+    // the old document.  We only deal with the toplevel load at this time --
+    // to be consistent with normal document loading, subframes cannot start
+    // loading until after data arrives, which is after STATE_START completes.
+
+    nsRefPtr<RestorePresentationEvent> currentPresentationRestoration =
+      mRestorePresentationEvent.get();
+    Stop();
+    // Make sure we're still restoring the same presentation.
+    // If we aren't, docshell is in process doing another load already.
+    NS_ENSURE_STATE(currentPresentationRestoration ==
+                    mRestorePresentationEvent.get());
+    BeginRestore(viewer, true);
+    NS_ENSURE_STATE(currentPresentationRestoration ==
+                    mRestorePresentationEvent.get());
+    forgetter.Forget();
 
     // Set mFiredUnloadEvent = false so that the unload handler for the
     // *new* document will fire.
@@ -8553,8 +8617,8 @@ nsDocShell::RestoreFromHistory()
 
         // this.AddChild(child) calls child.SetDocLoaderParent(this), meaning
         // that the child inherits our state. Among other things, this means
-        // that the child inherits our mIsActive and mInPrivateBrowsing, which
-        // is what we want.
+        // that the child inherits our mIsActive, mIsPrerendered and mInPrivateBrowsing,
+        // which is what we want.
         AddChild(childItem);
 
         childShell->SetAllowPlugins(allowPlugins);
@@ -9141,7 +9205,9 @@ nsDocShell::CheckLoadingPermissions()
     // Note - The check for a current JSContext here isn't necessarily sensical.
     // It's just designed to preserve the old semantics during a mass-conversion
     // patch.
-    NS_ENSURE_TRUE(nsContentUtils::GetCurrentJSContext(), NS_OK);
+    if (!nsContentUtils::GetCurrentJSContext()) {
+      return NS_OK;
+    }
 
     // Check if the caller is from the same origin as this docshell,
     // or any of its ancestors.
@@ -9569,9 +9635,13 @@ nsDocShell::InternalLoad(nsIURI * aURI,
             nsAutoCString spec;
             if (aURI)
                 aURI->GetSpec(spec);
+            nsAutoString features;
+            if (mInPrivateBrowsing) {
+              features.AssignLiteral("private");
+            }
             rv = win->OpenNoNavigate(NS_ConvertUTF8toUTF16(spec),
                                      name,          // window name
-                                     EmptyString(), // Features
+                                     features,
                                      getter_AddRefs(newWin));
 
             // In some cases the Open call doesn't actually result in a new
@@ -10129,6 +10199,9 @@ nsDocShell::InternalLoad(nsIURI * aURI,
     else
       srcdoc = NullString();
 
+    mozilla::net::PredictorLearn(aURI, nullptr,
+                                 nsINetworkPredictor::LEARN_LOAD_TOPLEVEL,
+                                 this);
     mozilla::net::PredictorPredict(aURI, nullptr,
                                    nsINetworkPredictor::PREDICT_LOAD,
                                    this, nullptr);
@@ -12823,9 +12896,16 @@ nsDocShell::GetTopFrameElement(nsIDOMElement** aElement)
     win->GetScriptableTop(getter_AddRefs(top));
     NS_ENSURE_TRUE(top, NS_ERROR_FAILURE);
 
-    // GetFrameElement, /not/ GetScriptableFrameElement -- if |top| is inside
-    // <iframe mozbrowser>, we want to return the iframe, not null.
-    return top->GetFrameElement(aElement);
+    nsCOMPtr<nsPIDOMWindow> piTop = do_QueryInterface(top);
+    NS_ENSURE_TRUE(piTop, NS_ERROR_FAILURE);
+
+    // GetFrameElementInternal, /not/ GetScriptableFrameElement -- if |top| is
+    // inside <iframe mozbrowser>, we want to return the iframe, not null.
+    // And we want to cross the content/chrome boundary.
+    nsCOMPtr<nsIDOMElement> elt =
+        do_QueryInterface(piTop->GetFrameElementInternal());
+    elt.forget(aElement);
+    return NS_OK;
 }
 
 NS_IMETHODIMP
@@ -13109,7 +13189,7 @@ nsDocShell::OnLinkClick(nsIContent* aContent,
 {
   NS_ASSERTION(NS_IsMainThread(), "wrong thread");
 
-  if (!IsOKToLoadURI(aURI)) {
+  if (!IsNavigationAllowed() || !IsOKToLoadURI(aURI)) {
     return NS_OK;
   }
 
@@ -13165,7 +13245,7 @@ nsDocShell::OnLinkClickSync(nsIContent *aContent,
     *aRequest = nullptr;
   }
 
-  if (!IsOKToLoadURI(aURI)) {
+  if (!IsNavigationAllowed() || !IsOKToLoadURI(aURI)) {
     return NS_OK;
   }
 
@@ -13718,4 +13798,36 @@ nsDocShell::MaybeNotifyKeywordSearchLoading(const nsString &aProvider,
     }
   }
 #endif
+}
+
+NS_IMETHODIMP
+nsDocShell::SetPaymentRequestId(const nsAString& aPaymentRequestId)
+{
+    mPaymentRequestId = aPaymentRequestId;
+    return NS_OK;
+}
+
+nsString
+nsDocShell::GetInheritedPaymentRequestId()
+{
+    if (!mPaymentRequestId.IsEmpty()) {
+      return mPaymentRequestId;
+    }
+
+    nsCOMPtr<nsIDocShellTreeItem> parentAsItem;
+    GetSameTypeParent(getter_AddRefs(parentAsItem));
+
+    nsCOMPtr<nsIDocShell> parent = do_QueryInterface(parentAsItem);
+    if (!parent) {
+      return mPaymentRequestId;
+    }
+    return static_cast<nsDocShell*>(
+        parent.get())->GetInheritedPaymentRequestId();
+}
+
+NS_IMETHODIMP
+nsDocShell::GetPaymentRequestId(nsAString& aPaymentRequestId)
+{
+    aPaymentRequestId = GetInheritedPaymentRequestId();
+    return NS_OK;
 }

@@ -92,7 +92,7 @@ pref("network.buffer.cache.count", 24);
 pref("network.buffer.cache.size",  16384);
 
 // predictive actions
-pref("network.predictor.enable", false); // disabled on b2g
+pref("network.predictor.enabled", false); // disabled on b2g
 pref("network.predictor.max-db-size", 2097152); // bytes
 pref("network.predictor.preserve", 50); // percentage of predictor data to keep when cleaning up
 
@@ -161,16 +161,8 @@ pref("accessibility.typeaheadfind.casesensitive", 0);
 pref("browser.ssl_override_behavior", 2);
 pref("browser.xul.error_pages.expert_bad_cert", false);
 
-// disable logging for the search service by default
-pref("browser.search.log", false);
-
 // disable updating
 pref("browser.search.update", false);
-pref("browser.search.update.log", false);
-pref("browser.search.updateinterval", 6);
-
-// enable search suggestions by default
-pref("browser.search.suggest.enabled", true);
 
 // tell the search service that we don't really expose the "current engine"
 pref("browser.search.noCurrentEngine", true);
@@ -223,6 +215,7 @@ pref("dom.use_watchdog", false);
 // ensure that those calls don't accidentally trigger the dialog.
 pref("dom.max_script_run_time", 0);
 pref("dom.max_chrome_script_run_time", 0);
+pref("dom.max_child_script_run_time", 0);
 
 // plugins
 pref("plugin.disable", true);
@@ -308,9 +301,6 @@ pref("gfx.content.azure.backends", "cairo");
 // Web Notifications
 pref("notification.feature.enabled", true);
 
-// IndexedDB
-pref("dom.indexedDB.warningQuota", 5);
-
 // prevent video elements from preloading too much data
 pref("media.preload.default", 1); // default to preload none
 pref("media.preload.auto", 2);    // preload metadata if preload=auto
@@ -329,7 +319,7 @@ pref("media.fragmented-mp4.gonk.enabled", true);
 pref("media.video-queue.default-size", 3);
 
 // optimize images' memory usage
-pref("image.mem.decodeondraw", true);
+pref("image.mem.decodeondraw", false);
 pref("image.mem.allow_locking_in_content_processes", false); /* don't allow image locking */
 // Limit the surface cache to 1/8 of main memory or 128MB, whichever is smaller.
 // Almost everything that was factored into 'max_decoded_image_kb' is now stored
@@ -1061,6 +1051,9 @@ pref("services.mobileid.server.uri", "https://msisdn.services.mozilla.com");
 pref("dom.mapped_arraybuffer.enabled", true);
 #endif
 
+// BroadcastChannel API
+pref("dom.broadcastChannel.enabled", true);
+
 // UDPSocket API
 pref("dom.udpsocket.enabled", true);
 
@@ -1081,3 +1074,17 @@ pref("dom.mozSettings.SettingsService.verbose.enabled", false);
 // IndexedDB transactions to be opened as readonly or keep everything as
 // readwrite.
 pref("dom.mozSettings.allowForceReadOnly", false);
+
+// RequestSync API is enabled by default on B2G.
+pref("dom.requestSync.enabled", true);
+
+// Only enable for kit kat and above devices
+// kit kat == 19, L = 21, 20 is kit-kat for wearables
+// 15 is for the ICS emulators which will fallback to software vsync
+#if ANDROID_VERSION == 19 || ANDROID_VERSION == 21 || ANDROID_VERSION == 15
+pref("gfx.vsync.hw-vsync.enabled", true);
+pref("gfx.vsync.compositor", true);
+#else
+pref("gfx.vsync.hw-vsync.enabled", false);
+pref("gfx.vsync.compositor", false);
+#endif

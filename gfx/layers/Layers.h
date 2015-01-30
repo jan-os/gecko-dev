@@ -1204,6 +1204,15 @@ public:
     }
   }
 
+  // Set during construction for the container layer of scrollbar components.
+  void SetIsScrollbarContainer()
+  {
+    if (!mIsScrollbarContainer) {
+      mIsScrollbarContainer = true;
+      Mutated();
+    }
+  }
+
   // These getters can be used anytime.
   float GetOpacity() { return mOpacity; }
   gfx::CompositionOp GetMixBlendMode() const { return mMixBlendMode; }
@@ -1226,8 +1235,9 @@ public:
   virtual Layer* GetLastChild() const { return nullptr; }
   const gfx::Matrix4x4 GetTransform() const;
   const gfx::Matrix4x4& GetBaseTransform() const { return mTransform; }
-  float GetPostXScale() const { return mPostXScale; }
-  float GetPostYScale() const { return mPostYScale; }
+  // Note: these are virtual because ContainerLayerComposite overrides them.
+  virtual float GetPostXScale() const { return mPostXScale; }
+  virtual float GetPostYScale() const { return mPostYScale; }
   bool GetIsFixedPosition() { return mIsFixedPosition; }
   bool GetIsStickyPosition() { return mStickyPositionData; }
   LayerPoint GetFixedPositionAnchor() { return mAnchor; }
@@ -1237,6 +1247,7 @@ public:
   const LayerRect& GetStickyScrollRangeInner() { return mStickyPositionData->mInner; }
   FrameMetrics::ViewID GetScrollbarTargetContainerId() { return mScrollbarTargetId; }
   ScrollDirection GetScrollbarDirection() { return mScrollbarDirection; }
+  bool IsScrollbarContainer() { return mIsScrollbarContainer; }
   Layer* GetMaskLayer() const { return mMaskLayer; }
 
 
@@ -1675,6 +1686,7 @@ protected:
   nsAutoPtr<StickyPositionData> mStickyPositionData;
   FrameMetrics::ViewID mScrollbarTargetId;
   ScrollDirection mScrollbarDirection;
+  bool mIsScrollbarContainer;
   DebugOnly<uint32_t> mDebugColorIndex;
   // If this layer is used for OMTA, then this counter is used to ensure we
   // stay in sync with the animation manager
@@ -1855,6 +1867,18 @@ public:
     Mutated();
   }
 
+  void SetScaleToResolution(bool aScaleToResolution, float aResolution)
+  {
+    if (mScaleToResolution == aScaleToResolution && mPresShellResolution == aResolution) {
+      return;
+    }
+
+    MOZ_LAYERS_LOG_IF_SHADOWABLE(this, ("Layer::Mutated(%p) ScaleToResolution", this));
+    mScaleToResolution = aScaleToResolution;
+    mPresShellResolution = aResolution;
+    Mutated();
+  }
+
   virtual void FillSpecificAttributes(SpecificLayerAttributes& aAttrs) MOZ_OVERRIDE;
 
   void SortChildrenBy3DZOrder(nsTArray<Layer*>& aArray);
@@ -1870,6 +1894,8 @@ public:
   float GetPreYScale() const { return mPreYScale; }
   float GetInheritedXScale() const { return mInheritedXScale; }
   float GetInheritedYScale() const { return mInheritedYScale; }
+  float GetPresShellResolution() const { return mPresShellResolution; }
+  bool ScaleToResolution() const { return mScaleToResolution; }
 
   MOZ_LAYER_DECL_NAME("ContainerLayer", TYPE_CONTAINER)
 
@@ -1968,6 +1994,11 @@ protected:
   // be part of mTransform.
   float mInheritedXScale;
   float mInheritedYScale;
+  // For layers corresponding to an nsDisplayResolution, the resolution of the
+  // associated pres shell; for other layers, 1.0.
+  float mPresShellResolution;
+  // Whether the compositor should scale to mPresShellResolution.
+  bool mScaleToResolution;
   bool mUseIntermediateSurface;
   bool mSupportsComponentAlphaChildren;
   bool mMayHaveReadbackChild;

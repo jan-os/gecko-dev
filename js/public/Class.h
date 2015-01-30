@@ -10,7 +10,6 @@
 #define js_Class_h
 
 #include "mozilla/DebugOnly.h"
-#include "mozilla/NullPtr.h"
 
 #include "jstypes.h"
 
@@ -200,10 +199,10 @@ typedef bool
 (* StrictElementIdOp)(JSContext *cx, JS::HandleObject obj, uint32_t index,
                       JS::MutableHandleValue vp, bool strict);
 typedef bool
-(* GenericAttributesOp)(JSContext *cx, JS::HandleObject obj, JS::HandleId id, unsigned *attrsp);
+(* GetOwnPropertyOp)(JSContext *cx, JS::HandleObject obj, JS::HandleId id,
+                     JS::MutableHandle<JSPropertyDescriptor> desc);
 typedef bool
-(* PropertyAttributesOp)(JSContext *cx, JS::HandleObject obj, JS::Handle<PropertyName*> name,
-                         unsigned *attrsp);
+(* GenericAttributesOp)(JSContext *cx, JS::HandleObject obj, JS::HandleId id, unsigned *attrsp);
 typedef bool
 (* DeleteGenericOp)(JSContext *cx, JS::HandleObject obj, JS::HandleId id, bool *succeeded);
 
@@ -379,7 +378,7 @@ struct ObjectOps
     StrictGenericIdOp   setGeneric;
     StrictPropertyIdOp  setProperty;
     StrictElementIdOp   setElement;
-    GenericAttributesOp getGenericAttributes;
+    GetOwnPropertyOp    getOwnPropertyDescriptor;
     GenericAttributesOp setGenericAttributes;
     DeleteGenericOp     deleteGeneric;
     WatchOp             watch;
@@ -392,7 +391,7 @@ struct ObjectOps
 #define JS_NULL_OBJECT_OPS                                                    \
     {nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr,  \
      nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr,  \
-     nullptr, nullptr, nullptr}
+     nullptr, nullptr, nullptr, nullptr}
 
 } // namespace js
 
@@ -438,7 +437,7 @@ struct JSClass {
 
 #define JSCLASS_IS_PROXY                (1<<(JSCLASS_HIGH_FLAGS_SHIFT+4))
 
-// Bit 22 unused.
+#define JSCLASS_FINALIZE_FROM_NURSERY   (1<<(JSCLASS_HIGH_FLAGS_SHIFT+5))
 
 // Reserved for embeddings.
 #define JSCLASS_USERBIT2                (1<<(JSCLASS_HIGH_FLAGS_SHIFT+6))
@@ -463,7 +462,7 @@ struct JSClass {
 // the beginning of every global object's slots for use by the
 // application.
 #define JSCLASS_GLOBAL_APPLICATION_SLOTS 4
-#define JSCLASS_GLOBAL_SLOT_COUNT      (JSCLASS_GLOBAL_APPLICATION_SLOTS + JSProto_LIMIT * 3 + 30)
+#define JSCLASS_GLOBAL_SLOT_COUNT      (JSCLASS_GLOBAL_APPLICATION_SLOTS + JSProto_LIMIT * 3 + 31)
 #define JSCLASS_GLOBAL_FLAGS_WITH_SLOTS(n)                                    \
     (JSCLASS_IS_GLOBAL | JSCLASS_HAS_RESERVED_SLOTS(JSCLASS_GLOBAL_SLOT_COUNT + (n)))
 #define JSCLASS_GLOBAL_FLAGS                                                  \
@@ -494,7 +493,13 @@ struct Class
     ClassExtension      ext;
     ObjectOps           ops;
 
-    /* Class is not native and its map is not a scope. */
+    /*
+     * Objects of this class aren't native objects. They don't have Shapes that
+     * describe their properties and layout. Classes using this flag must
+     * provide their own property behavior, either by being proxy classes (do
+     * this) or by overriding all the ObjectOps except getElements, watch,
+     * unwatch, and thisObject (don't do this).
+     */
     static const uint32_t NON_NATIVE = JSCLASS_INTERNAL_FLAG2;
 
     bool isNative() const {
@@ -579,7 +584,11 @@ Valueify(const JSClass *c)
 enum ESClassValue {
     ESClass_Object, ESClass_Array, ESClass_Number, ESClass_String,
     ESClass_Boolean, ESClass_RegExp, ESClass_ArrayBuffer, ESClass_SharedArrayBuffer,
-    ESClass_Date, ESClass_Set, ESClass_Map
+    ESClass_Date, ESClass_Set, ESClass_Map,
+
+    // Special snowflake for the ES6 IsArray method.
+    // Please don't use it without calling that function.
+    ESClass_IsArray
 };
 
 /*

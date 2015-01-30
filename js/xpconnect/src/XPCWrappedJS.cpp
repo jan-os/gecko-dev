@@ -8,10 +8,10 @@
 
 #include "xpcprivate.h"
 #include "jsprf.h"
+#include "mozilla/jsipc/CrossProcessObjectWrappers.h"
 #include "nsCCUncollectableMarker.h"
 #include "nsContentUtils.h"
 #include "nsThreadUtils.h"
-#include "JavaScriptParent.h"
 
 using namespace mozilla;
 
@@ -385,7 +385,7 @@ nsXPCWrappedJS::nsXPCWrappedJS(JSContext* cx,
                                nsresult *rv)
     : mJSObj(aJSObj),
       mClass(aClass),
-      mRoot(root ? root : MOZ_THIS_IN_INITIALIZER_LIST()),
+      mRoot(root ? root : this),
       mNext(nullptr)
 {
     *rv = InitStub(GetClass()->GetIID());

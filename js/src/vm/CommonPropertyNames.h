@@ -47,7 +47,6 @@
     macro(count, count, "count") \
     macro(currency, currency, "currency") \
     macro(currencyDisplay, currencyDisplay, "currencyDisplay") \
-    macro(std_iterator, std_iterator, "@@iterator") \
     macro(DateTimeFormat, DateTimeFormat, "DateTimeFormat") \
     macro(DateTimeFormatFormatGet, DateTimeFormatFormatGet, "Intl_DateTimeFormat_format_get") \
     macro(decodeURI, decodeURI, "decodeURI") \
@@ -79,6 +78,7 @@
     macro(float32, float32, "float32") \
     macro(float32x4, float32x4, "float32x4") \
     macro(float64, float64, "float64") \
+    macro(float64x2, float64x2, "float64x2") \
     macro(forceInterpreter, forceInterpreter, "forceInterpreter") \
     macro(format, format, "format") \
     macro(frame, frame, "frame") \
@@ -211,6 +211,7 @@
     macro(useAsm, useAsm, "use asm") \
     macro(useStrict, useStrict, "use strict") \
     macro(value, value, "value") \
+    macro(values, values, "values") \
     macro(valueOf, valueOf, "valueOf") \
     macro(var, var, "var") \
     macro(variable, variable, "variable") \

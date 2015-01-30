@@ -359,7 +359,7 @@ class OrderedHashTable
 
       private:
         // Prohibit copy assignment.
-        Range &operator=(const Range &other) MOZ_DELETE;
+        Range &operator=(const Range &other) = delete;
 
         void seek() {
             while (i < ht.dataLength && Ops::isEmpty(Ops::getKey(ht.data[i].element)))
@@ -667,8 +667,8 @@ class OrderedHashTable
     }
 
     // Not copyable.
-    OrderedHashTable &operator=(const OrderedHashTable &) MOZ_DELETE;
-    OrderedHashTable(const OrderedHashTable &) MOZ_DELETE;
+    OrderedHashTable &operator=(const OrderedHashTable &) = delete;
+    OrderedHashTable(const OrderedHashTable &) = delete;
 };
 
 }  // namespace detail
@@ -1077,14 +1077,9 @@ MapObject::initClass(JSContext *cx, JSObject *obj)
 
         // Define its alias.
         RootedValue funval(cx, ObjectValue(*fun));
-#if JS_HAS_SYMBOLS
         RootedId iteratorId(cx, SYMBOL_TO_JSID(cx->wellKnownSymbols().iterator));
         if (!JS_DefinePropertyById(cx, proto, iteratorId, funval, 0))
             return nullptr;
-#else
-        if (!JS_DefineProperty(cx, proto, js_std_iterator_str, funval, 0))
-            return nullptr;
-#endif
     }
     return proto;
 }
@@ -1233,7 +1228,7 @@ MapObject::construct(JSContext *cx, unsigned argc, Value *vp)
     CallArgs args = CallArgsFromVp(argc, vp);
     if (!args.get(0).isNullOrUndefined()) {
         RootedValue adderVal(cx);
-        if (!JSObject::getProperty(cx, obj, obj, cx->names().set, &adderVal))
+        if (!GetProperty(cx, obj, obj, cx->names().set, &adderVal))
             return false;
 
         if (!IsCallable(adderVal))
@@ -1268,11 +1263,11 @@ MapObject::construct(JSContext *cx, unsigned argc, Value *vp)
                 return false;
 
             RootedValue key(cx);
-            if (!JSObject::getElement(cx, pairObj, pairObj, 0, &key))
+            if (!GetElement(cx, pairObj, pairObj, 0, &key))
                 return false;
 
             RootedValue val(cx);
-            if (!JSObject::getElement(cx, pairObj, pairObj, 1, &val))
+            if (!GetElement(cx, pairObj, pairObj, 1, &val))
                 return false;
 
             if (isOriginalAdder) {
@@ -1730,14 +1725,9 @@ SetObject::initClass(JSContext *cx, JSObject *obj)
         if (!JS_DefineProperty(cx, proto, "keys", funval, 0))
             return nullptr;
 
-#if JS_HAS_SYMBOLS
         RootedId iteratorId(cx, SYMBOL_TO_JSID(cx->wellKnownSymbols().iterator));
         if (!JS_DefinePropertyById(cx, proto, iteratorId, funval, 0))
             return nullptr;
-#else
-        if (!JS_DefineProperty(cx, proto, js_std_iterator_str, funval, 0))
-            return nullptr;
-#endif
     }
     return proto;
 }
@@ -1822,7 +1812,7 @@ SetObject::construct(JSContext *cx, unsigned argc, Value *vp)
     CallArgs args = CallArgsFromVp(argc, vp);
     if (!args.get(0).isNullOrUndefined()) {
         RootedValue adderVal(cx);
-        if (!JSObject::getProperty(cx, obj, obj, cx->names().add, &adderVal))
+        if (!GetProperty(cx, obj, obj, cx->names().add, &adderVal))
             return false;
 
         if (!IsCallable(adderVal))

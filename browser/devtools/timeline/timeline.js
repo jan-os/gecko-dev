@@ -5,9 +5,11 @@
 
 const { classes: Cc, interfaces: Ci, utils: Cu, results: Cr } = Components;
 
+Cu.import("resource://gre/modules/Services.jsm");
 Cu.import("resource://gre/modules/Task.jsm");
 Cu.import("resource://gre/modules/devtools/Loader.jsm");
 Cu.import("resource:///modules/devtools/ViewHelpers.jsm");
+Cu.import("resource:///modules/devtools/gDevTools.jsm");
 
 devtools.lazyRequireGetter(this, "promise");
 devtools.lazyRequireGetter(this, "EventEmitter",
@@ -98,6 +100,7 @@ let TimelineController = {
     this._onMarkers = this._onMarkers.bind(this);
     this._onMemory = this._onMemory.bind(this);
     this._onFrames = this._onFrames.bind(this);
+
     gFront.on("markers", this._onMarkers);
     gFront.on("memory", this._onMemory);
     gFront.on("frames", this._onFrames);
@@ -236,6 +239,10 @@ let TimelineController = {
    *        A time after the last marker in markers was collected.
    */
   _onMarkers: function(markers, endTime) {
+    for (let marker of markers) {
+      marker.start -= this._startTime;
+      marker.end -= this._startTime;
+    }
     Array.prototype.push.apply(this._markers, markers);
     this._endTime = endTime;
   },
@@ -249,7 +256,10 @@ let TimelineController = {
    *        A detailed breakdown of the current memory usage.
    */
   _onMemory: function(delta, measurement) {
-    this._memory.push({ delta, value: measurement.total / 1024 / 1024 });
+    this._memory.push({
+      delta: delta - this._startTime,
+      value: measurement.total / 1024 / 1024
+    });
   },
 
   /**
@@ -293,8 +303,11 @@ let TimelineView = {
     this.waterfall = new Waterfall($("#timeline-waterfall"), $("#timeline-pane"), blueprint);
     this.markerDetails = new MarkerDetails($("#timeline-waterfall-details"), $("#timeline-waterfall-container > splitter"));
 
+    this._onThemeChange = this._onThemeChange.bind(this);
     this._onSelecting = this._onSelecting.bind(this);
     this._onRefresh = this._onRefresh.bind(this);
+
+    gDevTools.on("pref-changed", this._onThemeChange);
     this.markersOverview.on("selecting", this._onSelecting);
     this.markersOverview.on("refresh", this._onRefresh);
     this.markerDetails.on("resize", this._onRefresh);
@@ -302,6 +315,9 @@ let TimelineView = {
     this._onMarkerSelected = this._onMarkerSelected.bind(this);
     this.waterfall.on("selected", this._onMarkerSelected);
     this.waterfall.on("unselected", this._onMarkerSelected);
+
+    let theme = Services.prefs.getCharPref("devtools.theme");
+    this.markersOverview.setTheme(theme);
 
     yield this.markersOverview.ready();
 
@@ -314,6 +330,7 @@ let TimelineView = {
    * Destruction function, called when the tool is closed.
    */
   destroy: function() {
+    gDevTools.off("pref-changed", this._onThemeChange);
     this.markerDetails.off("resize", this._onRefresh);
     this.markerDetails.destroy();
     this.waterfall.off("selected", this._onMarkerSelected);
@@ -333,12 +350,14 @@ let TimelineView = {
    * Shows the memory overview graph.
    */
   showMemoryOverview: Task.async(function*() {
+    let theme = Services.prefs.getCharPref("devtools.theme");
+
     this.memoryOverview = new MemoryOverview($("#memory-overview"));
+    this.memoryOverview.setTheme(theme);
     yield this.memoryOverview.ready();
 
-    let interval = TimelineController.getInterval();
     let memory = TimelineController.getMemory();
-    this.memoryOverview.setData({ interval, memory });
+    this.memoryOverview.setData(memory);
 
     CanvasGraphUtils.linkAnimation(this.markersOverview, this.memoryOverview);
     CanvasGraphUtils.linkSelection(this.markersOverview, this.memoryOverview);
@@ -413,13 +432,13 @@ let TimelineView = {
     let memory = TimelineController.getMemory();
 
     if (markers.length) {
-      let start = (markers[0].start - interval.startTime) * this.markersOverview.dataScaleX;
+      let start = markers[0].start * this.markersOverview.dataScaleX;
       let end = start + this.markersOverview.width * OVERVIEW_INITIAL_SELECTION_RATIO;
       this.markersOverview.setSelection({ start, end });
     } else {
       let startTime = interval.startTime;
       let endTime = interval.endTime;
-      this.waterfall.setData(markers, startTime, startTime, endTime);
+      this.waterfall.setData({ markers, interval: { startTime, endTime } });
     }
 
     window.emit(EVENTS.RECORDING_ENDED);
@@ -434,11 +453,12 @@ let TimelineView = {
     let markers = TimelineController.getMarkers();
     let memory = TimelineController.getMemory();
 
-    this.markersOverview.setData({ interval, markers });
+    let duration = interval.endTime - interval.startTime;
+    this.markersOverview.setData({ markers, duration });
 
     // The memory overview graph is not always available.
     if (this.memoryOverview) {
-      this.memoryOverview.setData({ interval, memory });
+      this.memoryOverview.setData(memory);
     }
 
     window.emit(EVENTS.OVERVIEW_UPDATED);
@@ -468,10 +488,10 @@ let TimelineView = {
     let markers = TimelineController.getMarkers();
     let interval = TimelineController.getInterval();
 
-    let startTime = interval.startTime + Math.min(start, end);
-    let endTime = interval.startTime + Math.max(start, end);
+    let startTime = Math.min(start, end);
+    let endTime = Math.max(start, end);
 
-    this.waterfall.setData(markers, interval.startTime, startTime, endTime);
+    this.waterfall.setData({ markers, interval: { startTime, endTime } });
   },
 
   /**
@@ -575,6 +595,20 @@ let TimelineView = {
       popup.appendChild(menuitem);
     }
   },
+
+  /*
+   * Called when the developer tools theme changes. Redraws
+   * the graphs with the new theme setting.
+   */
+  _onThemeChange: function (_, theme) {
+    if (this.memoryOverview) {
+      this.memoryOverview.setTheme(theme.newValue);
+      this.memoryOverview.refresh({ force: true });
+    }
+
+    this.markersOverview.setTheme(theme.newValue);
+    this.markersOverview.refresh({ force: true });
+  }
 };
 
 /**

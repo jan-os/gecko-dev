@@ -239,9 +239,9 @@ class SimInstruction
 
   private:
 
-    SimInstruction() MOZ_DELETE;
-    SimInstruction(const SimInstruction &other) MOZ_DELETE;
-    void operator=(const SimInstruction &other) MOZ_DELETE;
+    SimInstruction() = delete;
+    SimInstruction(const SimInstruction &other) = delete;
+    void operator=(const SimInstruction &other) = delete;
 };
 
 bool
@@ -508,7 +508,7 @@ class SimulatorRuntime
   protected:
     ICacheMap icache_;
 
-    // Synchronize access between main thread and compilation/PJS threads.
+    // Synchronize access between main thread and compilation threads.
     PRLock *lock_;
     mozilla::DebugOnly<PRThread *> lockOwner_;
 
@@ -1551,6 +1551,14 @@ Simulator::getFpArgs(double *x, double *y, int32_t *z)
 }
 
 void
+Simulator::getFpFromStack(int32_t *stack, double *x)
+{
+    MOZ_ASSERT(stack);
+    MOZ_ASSERT(x);
+    memcpy(x, stack, sizeof(double));
+}
+
+void
 Simulator::setCallResultDouble(double result)
 {
     setFpuRegisterDouble(f0, result);
@@ -1857,6 +1865,10 @@ typedef double (*Prototype_Double_IntDouble)(int32_t arg0, double arg1);
 typedef double (*Prototype_Double_DoubleDouble)(double arg0, double arg1);
 typedef int32_t (*Prototype_Int_IntDouble)(int32_t arg0, double arg1);
 
+typedef double (*Prototype_Double_DoubleDoubleDouble)(double arg0, double arg1, double arg2);
+typedef double (*Prototype_Double_DoubleDoubleDoubleDouble)(double arg0, double arg1,
+                                                            double arg2, double arg3);
+
 // Software interrupt instructions are used by the simulator to call into C++.
 void
 Simulator::softwareInterrupt(SimInstruction *instr)
@@ -2020,6 +2032,29 @@ Simulator::softwareInterrupt(SimInstruction *instr)
             Prototype_Int_IntDouble target = reinterpret_cast<Prototype_Int_IntDouble>(external);
             int32_t result = target(ival, dval0);
             setRegister(v0, result);
+            break;
+          }
+          case Args_Double_DoubleDoubleDouble: {
+            double dval0, dval1, dval2;
+            int32_t ival;
+            getFpArgs(&dval0, &dval1, &ival);
+            // the last argument is on stack
+            getFpFromStack(stack_pointer + 4, &dval2);
+            Prototype_Double_DoubleDoubleDouble target = reinterpret_cast<Prototype_Double_DoubleDoubleDouble>(external);
+            double dresult = target(dval0, dval1, dval2);
+            setCallResultDouble(dresult);
+            break;
+         }
+         case Args_Double_DoubleDoubleDoubleDouble: {
+            double dval0, dval1, dval2, dval3;
+            int32_t ival;
+            getFpArgs(&dval0, &dval1, &ival);
+            // the two last arguments are on stack
+            getFpFromStack(stack_pointer + 4, &dval2);
+            getFpFromStack(stack_pointer + 6, &dval3);
+            Prototype_Double_DoubleDoubleDoubleDouble target = reinterpret_cast<Prototype_Double_DoubleDoubleDoubleDouble>(external);
+            double dresult = target(dval0, dval1, dval2, dval3);
+            setCallResultDouble(dresult);
             break;
           }
           default:
@@ -3312,7 +3347,7 @@ Simulator::execute()
     // Get the PC to simulate. Cannot use the accessor here as we need the
     // raw PC value and not the one used as input to arithmetic instructions.
     int program_counter = get_pc();
-    AsmJSActivation *activation = TlsPerThreadData.get()->asmJSActivationStack();
+    AsmJSActivation *activation = TlsPerThreadData.get()->runtimeFromMainThread()->asmJSActivationStack();
 
     while (program_counter != end_sim_pc) {
         if (enableStopSimAt && (icount_ == Simulator::StopSimAt)) {
@@ -3470,28 +3505,40 @@ Simulator::popAddress()
 } // namespace js
 
 js::jit::Simulator *
-js::PerThreadData::simulator() const
+JSRuntime::simulator() const
 {
     return simulator_;
+}
+
+js::jit::Simulator *
+js::PerThreadData::simulator() const
+{
+    return runtime_->simulator();
+}
+
+void
+JSRuntime::setSimulator(js::jit::Simulator *sim)
+{
+    simulator_ = sim;
+    simulatorStackLimit_ = sim->stackLimit();
 }
 
 void
 js::PerThreadData::setSimulator(js::jit::Simulator *sim)
 {
-    simulator_ = sim;
-    simulatorStackLimit_ = sim->stackLimit();
+    runtime_->setSimulator(sim);
+}
+
+uintptr_t *
+JSRuntime::addressOfSimulatorStackLimit()
+{
+    return &simulatorStackLimit_;
 }
 
 js::jit::SimulatorRuntime *
 js::PerThreadData::simulatorRuntime() const
 {
     return runtime_->simulatorRuntime();
-}
-
-uintptr_t *
-js::PerThreadData::addressOfSimulatorStackLimit()
-{
-    return &simulatorStackLimit_;
 }
 
 js::jit::SimulatorRuntime *

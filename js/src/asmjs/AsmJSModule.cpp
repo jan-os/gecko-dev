@@ -37,6 +37,7 @@
 
 #include "frontend/Parser.h"
 #include "jit/IonCode.h"
+#include "js/Conversions.h"
 #include "js/MemoryMetrics.h"
 
 #include "jsobjinlines.h"
@@ -289,7 +290,7 @@ AsmJSModule::finish(ExclusiveContext *cx, TokenStream &tokenStream, MacroAssembl
     // The global data section sits immediately after the executable (and
     // other) data allocated by the MacroAssembler, so ensure it is
     // SIMD-aligned.
-    pod.codeBytes_ = AlignBytes(masm.bytesNeeded(), SimdStackAlignment);
+    pod.codeBytes_ = AlignBytes(masm.bytesNeeded(), SimdMemoryAlignment);
 
     // The entire region is allocated via mmap/VirtualAlloc which requires
     // units of pages.
@@ -452,7 +453,7 @@ AsmJSModule::setAutoFlushICacheRange()
 static void
 AsmJSReportOverRecursed()
 {
-    JSContext *cx = PerThreadData::innermostAsmJSActivation()->cx();
+    JSContext *cx = JSRuntime::innermostAsmJSActivation()->cx();
     js_ReportOverRecursed(cx);
 }
 
@@ -460,14 +461,14 @@ static void
 OnDetached()
 {
     // See hasDetachedHeap comment in LinkAsmJS.
-    JSContext *cx = PerThreadData::innermostAsmJSActivation()->cx();
+    JSContext *cx = JSRuntime::innermostAsmJSActivation()->cx();
     JS_ReportErrorNumber(cx, js_GetErrorMessage, nullptr, JSMSG_OUT_OF_MEMORY);
 }
 
 static bool
 AsmJSHandleExecutionInterrupt()
 {
-    AsmJSActivation *act = PerThreadData::innermostAsmJSActivation();
+    AsmJSActivation *act = JSRuntime::innermostAsmJSActivation();
     act->module().setInterrupted(true);
     bool ret = CheckForInterrupt(act->cx());
     act->module().setInterrupted(false);
@@ -477,7 +478,7 @@ AsmJSHandleExecutionInterrupt()
 static int32_t
 CoerceInPlace_ToInt32(MutableHandleValue val)
 {
-    JSContext *cx = PerThreadData::innermostAsmJSActivation()->cx();
+    JSContext *cx = JSRuntime::innermostAsmJSActivation()->cx();
 
     int32_t i32;
     if (!ToInt32(cx, val, &i32))
@@ -490,7 +491,7 @@ CoerceInPlace_ToInt32(MutableHandleValue val)
 static int32_t
 CoerceInPlace_ToNumber(MutableHandleValue val)
 {
-    JSContext *cx = PerThreadData::innermostAsmJSActivation()->cx();
+    JSContext *cx = JSRuntime::innermostAsmJSActivation()->cx();
 
     double dbl;
     if (!ToNumber(cx, val, &dbl))
@@ -569,7 +570,7 @@ InvokeFromAsmJS(AsmJSActivation *activation, int32_t exitIndex, int32_t argc, Va
 static int32_t
 InvokeFromAsmJS_Ignore(int32_t exitIndex, int32_t argc, Value *argv)
 {
-    AsmJSActivation *activation = PerThreadData::innermostAsmJSActivation();
+    AsmJSActivation *activation = JSRuntime::innermostAsmJSActivation();
     JSContext *cx = activation->cx();
 
     RootedValue rval(cx);
@@ -581,7 +582,7 @@ InvokeFromAsmJS_Ignore(int32_t exitIndex, int32_t argc, Value *argv)
 static int32_t
 InvokeFromAsmJS_ToInt32(int32_t exitIndex, int32_t argc, Value *argv)
 {
-    AsmJSActivation *activation = PerThreadData::innermostAsmJSActivation();
+    AsmJSActivation *activation = JSRuntime::innermostAsmJSActivation();
     JSContext *cx = activation->cx();
 
     RootedValue rval(cx);
@@ -601,7 +602,7 @@ InvokeFromAsmJS_ToInt32(int32_t exitIndex, int32_t argc, Value *argv)
 static int32_t
 InvokeFromAsmJS_ToNumber(int32_t exitIndex, int32_t argc, Value *argv)
 {
-    AsmJSActivation *activation = PerThreadData::innermostAsmJSActivation();
+    AsmJSActivation *activation = JSRuntime::innermostAsmJSActivation();
     JSContext *cx = activation->cx();
 
     RootedValue rval(cx);
@@ -671,7 +672,7 @@ AddressOf(AsmJSImmKind kind, ExclusiveContext *cx)
       case AsmJSImm_CoerceInPlace_ToNumber:
         return RedirectCall(FuncCast(CoerceInPlace_ToNumber), Args_General1);
       case AsmJSImm_ToInt32:
-        return RedirectCall(FuncCast<int32_t (double)>(js::ToInt32), Args_Int_Double);
+        return RedirectCall(FuncCast<int32_t (double)>(JS::ToInt32), Args_Int_Double);
 #if defined(JS_CODEGEN_ARM)
       case AsmJSImm_aeabi_idivmod:
         return RedirectCall(FuncCast(__aeabi_idivmod), Args_General2);
@@ -1918,13 +1919,13 @@ class ModuleChars
 
   public:
     static uint32_t beginOffset(AsmJSParser &parser) {
-      return parser.pc->maybeFunction->pn_pos.begin;
+        return parser.pc->maybeFunction->pn_pos.begin;
     }
 
     static uint32_t endOffset(AsmJSParser &parser) {
-      TokenPos pos;
-      MOZ_ALWAYS_TRUE(parser.tokenStream.peekTokenPos(&pos));
-      return pos.end;
+        TokenPos pos(0, 0);  // initialize to silence GCC warning
+        MOZ_ALWAYS_TRUE(parser.tokenStream.peekTokenPos(&pos));
+        return pos.end;
     }
 };
 

@@ -42,8 +42,6 @@ EXTRA_JS_MODULES.devtools.server.actors += [
     'actors/common.js',
     'actors/csscoverage.js',
     'actors/device.js',
-    'actors/director-manager.js',
-    'actors/director-registry.js',
     'actors/eventlooplag.js',
     'actors/framerate.js',
     'actors/gcli.js',
@@ -57,6 +55,7 @@ EXTRA_JS_MODULES.devtools.server.actors += [
     'actors/profiler.js',
     'actors/root.js',
     'actors/script.js',
+    'actors/settings.js',
     'actors/storage.js',
     'actors/string.js',
     'actors/styleeditor.js',
@@ -72,6 +71,7 @@ EXTRA_JS_MODULES.devtools.server.actors += [
 ]
 
 EXTRA_JS_MODULES.devtools.server.actors.utils += [
+    'actors/utils/actor-registry-utils.js',
     'actors/utils/automation-timeline.js',
     'actors/utils/make-debugger.js',
     'actors/utils/map-uri-to-addon-id.js',

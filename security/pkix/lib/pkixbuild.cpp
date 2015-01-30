@@ -43,7 +43,7 @@ TrustDomain::IssuerChecker::~IssuerChecker() { }
 
 // The implementation of TrustDomain::IssuerTracker is in a subclass only to
 // hide the implementation from external users.
-class PathBuildingStep : public TrustDomain::IssuerChecker
+class PathBuildingStep final : public TrustDomain::IssuerChecker
 {
 public:
   PathBuildingStep(TrustDomain& trustDomain, const BackCert& subject,
@@ -66,7 +66,7 @@ public:
 
   Result Check(Input potentialIssuerDER,
                /*optional*/ const Input* additionalNameConstraints,
-               /*out*/ bool& keepGoing);
+               /*out*/ bool& keepGoing) override;
 
   Result CheckResult() const;
 
@@ -84,8 +84,8 @@ private:
   Result result;
   bool resultWasSet;
 
-  PathBuildingStep(const PathBuildingStep&) /*= delete*/;
-  void operator=(const PathBuildingStep&) /*= delete*/;
+  PathBuildingStep(const PathBuildingStep&) = delete;
+  void operator=(const PathBuildingStep&) = delete;
 };
 
 Result

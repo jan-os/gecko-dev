@@ -710,20 +710,22 @@ RegExpCompartment::createMatchResultTemplateObject(JSContext *cx)
     Rooted<TaggedProto> proto(cx, templateObject->getTaggedProto());
     types::TypeObject *type =
         cx->compartment()->types.newTypeObject(cx, templateObject->getClass(), proto);
+    if (!type)
+        return matchResultTemplateObject_; // = nullptr
     templateObject->setType(type);
 
     /* Set dummy index property */
     RootedValue index(cx, Int32Value(0));
-    if (!baseops::DefineProperty(cx, templateObject, cx->names().index, index, nullptr, nullptr,
-                                 JSPROP_ENUMERATE))
+    if (!NativeDefineProperty(cx, templateObject, cx->names().index, index, nullptr, nullptr,
+                              JSPROP_ENUMERATE))
     {
         return matchResultTemplateObject_; // = nullptr
     }
 
     /* Set dummy input property */
     RootedValue inputVal(cx, StringValue(cx->runtime()->emptyString));
-    if (!baseops::DefineProperty(cx, templateObject, cx->names().input, inputVal, nullptr, nullptr,
-                                 JSPROP_ENUMERATE))
+    if (!NativeDefineProperty(cx, templateObject, cx->names().input, inputVal, nullptr, nullptr,
+                              JSPROP_ENUMERATE))
     {
         return matchResultTemplateObject_; // = nullptr
     }

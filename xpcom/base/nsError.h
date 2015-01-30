@@ -8,7 +8,6 @@
 #define nsError_h__
 
 #include "mozilla/Likely.h"
-#include "mozilla/TypedEnum.h"
 
 #include <stdint.h>
 
@@ -122,7 +121,7 @@
  * either can be converted to the other, so it's ambiguous.  So we have to fall
  * back to a regular enum.
  */
-#if defined(MOZ_HAVE_CXX11_STRONG_ENUMS)
+#if defined(__cplusplus)
   typedef enum class tag_nsresult : uint32_t
   {
     #undef ERROR
@@ -136,29 +135,6 @@
    * #define's for compatibility with old code.
    */
   #include "ErrorListCxxDefines.h"
-#elif defined(MOZ_HAVE_CXX11_ENUM_TYPE)
-  typedef enum tag_nsresult : uint32_t
-  {
-    #undef ERROR
-    #define ERROR(key, val) key = val
-    #include "ErrorList.h"
-    #undef ERROR
-  } nsresult;
-#elif defined(__cplusplus)
-  /*
-   * We're C++ in an old compiler lacking enum classes *and* typed enums (likely
-   * gcc < 4.5.1 as clang/MSVC have long supported one or both), or compiler
-   * support is unknown.  Yet nsresult must have unsigned 32-bit representation.
-   * So just make it a typedef, and implement the constants with global consts.
-   */
-  typedef uint32_t nsresult;
-
-  const nsresult
-  #undef ERROR
-  #define ERROR(key, val) key = val
-  #include "ErrorList.h"
-  #undef ERROR
-    ;
 #else
   /*
    * C doesn't have any way to fix the type underlying an enum, and enum

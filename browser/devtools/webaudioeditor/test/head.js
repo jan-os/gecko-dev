@@ -231,7 +231,7 @@ function checkVariableView (view, index, hash, description = "") {
   // If node shouldn't display any properties, ensure that the 'empty' message is
   // visible
   if (!variables.length) {
-    ok(isVisible(scope.window.$("#properties-tabpanel-content-empty")),
+    ok(isVisible(scope.window.$("#properties-empty")),
       description + " should show the empty properties tab.");
     return;
   }
@@ -316,6 +316,12 @@ function click (win, element) {
 
 function mouseOver (win, element) {
   EventUtils.sendMouseEvent({ type: "mouseover" }, element, win);
+}
+
+function command (button) {
+  let ev = button.ownerDocument.createEvent("XULCommandEvent");
+  ev.initCommandEvent("command", true, true, button.ownerDocument.defaultView, 0, false, false, false, false, null);
+  button.dispatchEvent(ev);
 }
 
 function isVisible (element) {
@@ -413,15 +419,25 @@ function checkAutomationValue (values, time, expected) {
    */
   function getValueAt (values, time) {
     for (let i = 0; i < values.length; i++) {
-      if (values[i].t === time) {
+      if (values[i].delta === time) {
         return values[i].value;
       }
-      if (values[i].t > time) {
+      if (values[i].delta > time) {
         return (values[i - 1].value + values[i].value) / 2;
       }
     }
     return values[values.length - 1].value;
   }
+}
+
+/**
+ * Wait for all inspector tabs to complete rendering.
+ */
+function waitForInspectorRender (panelWin, EVENTS) {
+  return Promise.all([
+    once(panelWin, EVENTS.UI_PROPERTIES_TAB_RENDERED),
+    once(panelWin, EVENTS.UI_AUTOMATION_TAB_RENDERED)
+  ]);
 }
 
 /**
@@ -497,5 +513,8 @@ const NODE_DEFAULT_VALUES = {
     "type": "sine",
     "frequency": 440,
     "detune": 0
+  },
+  "StereoPannerNode": {
+    "pan": 0
   }
 };

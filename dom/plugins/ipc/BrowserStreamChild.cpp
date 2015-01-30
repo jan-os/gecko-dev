@@ -28,7 +28,7 @@ BrowserStreamChild::BrowserStreamChild(PluginInstanceChild* instance,
   , mURL(url)
   , mHeaders(headers)
   , mStreamNotify(notifyData)
-  , mDeliveryTracker(MOZ_THIS_IN_INITIALIZER_LIST())
+  , mDeliveryTracker(this)
 {
   PLUGIN_LOG_DEBUG(("%s (%s, %i, %i, %p, %s)", FULLFUNCTION,
                     url.get(), length, lastmodified, (void*) notifyData,
@@ -62,7 +62,10 @@ BrowserStreamChild::StreamConstructed(
     &mStream, seekable, stype);
   if (rv != NPERR_NO_ERROR) {
     mState = DELETING;
-    mStreamNotify = nullptr;
+    if (mStreamNotify) {
+      mStreamNotify->SetAssociatedStream(nullptr);
+      mStreamNotify = nullptr;
+    }
   }
   else {
     mState = ALIVE;

@@ -289,6 +289,7 @@ class Simulator
   private:
     // Handle arguments and return value for runtime FP functions.
     void getFpArgs(double *x, double *y, int32_t *z);
+    void getFpFromStack(int32_t *stack, double *x1);
     void setCallResultDouble(double result);
     void setCallResultFloat(float result);
     void setCallResult(int64_t res);
@@ -377,7 +378,7 @@ class Simulator
 
 #define JS_CHECK_SIMULATOR_RECURSION_WITH_EXTRA(cx, extra, onerror)             \
     JS_BEGIN_MACRO                                                              \
-        if (cx->mainThread().simulator()->overRecursedWithExtra(extra)) {       \
+        if (cx->runtime()->simulator()->overRecursedWithExtra(extra)) {         \
             js_ReportOverRecursed(cx);                                          \
             onerror;                                                            \
         }                                                                       \

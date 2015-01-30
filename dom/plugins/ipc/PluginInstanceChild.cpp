@@ -483,7 +483,11 @@ PluginInstanceChild::NPN_GetValue(NPNVariable aVar,
 #endif /* NP_NO_QUICKDRAW */
 
     case NPNVcontentsScaleFactor: {
-        *static_cast<double*>(aValue) = mContentsScaleFactor;
+        double scaleFactor = mContentsScaleFactor;
+        if (GetQuirks() & PluginModuleChild::QUIRK_FLASH_HIDE_HIDPI_SUPPORT) {
+          scaleFactor = 1.0;
+        }
+        *static_cast<double*>(aValue) = scaleFactor;
         return NPERR_NO_ERROR;
     }
 #endif /* XP_MACOSX */
@@ -851,7 +855,7 @@ PluginInstanceChild::AnswerNPP_HandleEvent(const NPRemoteEvent& event,
 
 bool
 PluginInstanceChild::AnswerNPP_HandleEvent_Shmem(const NPRemoteEvent& event,
-                                                 Shmem& mem,
+                                                 Shmem&& mem,
                                                  int16_t* handled,
                                                  Shmem* rtnmem)
 {
@@ -915,7 +919,7 @@ PluginInstanceChild::AnswerNPP_HandleEvent_Shmem(const NPRemoteEvent& event,
 #else
 bool
 PluginInstanceChild::AnswerNPP_HandleEvent_Shmem(const NPRemoteEvent& event,
-                                                 Shmem& mem,
+                                                 Shmem&& mem,
                                                  int16_t* handled,
                                                  Shmem* rtnmem)
 {
@@ -2440,7 +2444,6 @@ StreamNotifyChild::ActorDestroy(ActorDestroyReason why)
 void
 StreamNotifyChild::SetAssociatedStream(BrowserStreamChild* bs)
 {
-    NS_ASSERTION(bs, "Shouldn't be null");
     NS_ASSERTION(!mBrowserStream, "Two streams for one streamnotify?");
 
     mBrowserStream = bs;

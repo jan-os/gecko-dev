@@ -9,10 +9,10 @@
 #ifndef mozilla_RefPtr_h
 #define mozilla_RefPtr_h
 
+#include "mozilla/AlreadyAddRefed.h"
 #include "mozilla/Assertions.h"
 #include "mozilla/Atomics.h"
 #include "mozilla/Attributes.h"
-#include "mozilla/NullPtr.h"
 #include "mozilla/RefCountType.h"
 #include "mozilla/TypeTraits.h"
 #if defined(MOZILLA_INTERNAL_API)
@@ -236,6 +236,7 @@ public:
   RefPtr() : mPtr(0) {}
   RefPtr(const RefPtr& aOther) : mPtr(ref(aOther.mPtr)) {}
   MOZ_IMPLICIT RefPtr(const TemporaryRef<T>& aOther) : mPtr(aOther.take()) {}
+  MOZ_IMPLICIT RefPtr(already_AddRefed<T>& aOther) : mPtr(aOther.take()) {}
   MOZ_IMPLICIT RefPtr(T* aVal) : mPtr(ref(aVal)) {}
 
   template<typename U>
@@ -249,6 +250,11 @@ public:
     return *this;
   }
   RefPtr& operator=(const TemporaryRef<T>& aOther)
+  {
+    assign(aOther.take());
+    return *this;
+  }
+  RefPtr& operator=(already_AddRefed<T>& aOther)
   {
     assign(aOther.take());
     return *this;
@@ -275,7 +281,7 @@ public:
 
   T* get() const { return mPtr; }
   operator T*() const { return mPtr; }
-  T* operator->() const { return mPtr; }
+  T* operator->() const MOZ_NO_ADDREF_RELEASE_ON_RETURN { return mPtr; }
   T& operator*() const { return *mPtr; }
   template<typename U>
   operator TemporaryRef<U>() { return TemporaryRef<U>(mPtr); }
@@ -340,8 +346,8 @@ private:
 
   mutable T* MOZ_OWNING_REF mPtr;
 
-  TemporaryRef() MOZ_DELETE;
-  void operator=(const TemporaryRef&) MOZ_DELETE;
+  TemporaryRef() = delete;
+  void operator=(const TemporaryRef&) = delete;
 };
 
 /**
@@ -378,8 +384,8 @@ private:
   RefPtr<T>& mRefPtr;
   T* mTmp;
 
-  OutParamRef() MOZ_DELETE;
-  OutParamRef& operator=(const OutParamRef&) MOZ_DELETE;
+  OutParamRef() = delete;
+  OutParamRef& operator=(const OutParamRef&) = delete;
 };
 
 /**

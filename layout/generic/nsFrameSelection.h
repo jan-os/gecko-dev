@@ -68,6 +68,7 @@ struct MOZ_STACK_CLASS nsPeekOffsetStruct
                      bool aScrollViewStop,
                      bool aIsKeyboardSelect,
                      bool aVisual,
+                     bool aExtend,
                      mozilla::EWordMovementType aWordMovementType = mozilla::eDefaultBehavior);
 
   // Note: Most arguments (input and output) are only used with certain values
@@ -122,6 +123,9 @@ struct MOZ_STACK_CLASS nsPeekOffsetStruct
   // mVisual: Whether bidi caret behavior is visual (true) or logical (false).
   //          Used with: eSelectCharacter, eSelectWord, eSelectBeginLine, eSelectEndLine.
   bool mVisual;
+
+  // mExtend: Whether the selection is being extended or moved.
+  bool mExtend;
 
   /*** Output arguments ***/
 
@@ -724,6 +728,7 @@ private:
 
   CaretAssociateHint mHint;   //hint to tell if the selection is at the end of this line or beginning of next
   nsBidiLevel mCaretBidiLevel;
+  nsBidiLevel mKbdBidiLevel;
 
   nsPoint mDesiredPos;
   uint32_t mDelayedMouseEventClickCount;

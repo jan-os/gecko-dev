@@ -94,7 +94,12 @@ class TabsGridLayout extends GridView
 
         final int padding = resources.getDimensionPixelSize(R.dimen.new_tablet_tab_panel_grid_padding);
         final int paddingTop = resources.getDimensionPixelSize(R.dimen.new_tablet_tab_panel_grid_padding_top);
-        setPadding(padding, paddingTop, padding, padding);
+
+        // Lets set double the top padding on the bottom so that the last row shows up properly!
+        // Your demise, GridView, cannot come fast enough.
+        final int paddingBottom = paddingTop * 2;
+
+        setPadding(padding, paddingTop, padding, paddingBottom);
 
         setOnItemClickListener(new OnItemClickListener() {
             @Override
@@ -221,16 +226,33 @@ class TabsGridLayout extends GridView
                 break;
 
             case CLOSED:
-                if(mTabsAdapter.getCount() > 0) {
+                if (mTabsAdapter.getCount() > 0) {
                     animateRemoveTab(tab);
                 }
-               if (tab.isPrivate() == mIsPrivate && mTabsAdapter.getCount() > 0) {
-                   if (mTabsAdapter.removeTab(tab)) {
-                       int selected = mTabsAdapter.getPositionForTab(Tabs.getInstance().getSelectedTab());
-                       updateSelectedStyle(selected);
-                   }
-               }
-               break;
+
+                final Tabs tabsInstance = Tabs.getInstance();
+
+                if (mTabsAdapter.removeTab(tab)) {
+                    if (tab.isPrivate() == mIsPrivate && mTabsAdapter.getCount() > 0) {
+                        int selected = mTabsAdapter.getPositionForTab(tabsInstance.getSelectedTab());
+                        updateSelectedStyle(selected);
+                    }
+                    if(!tab.isPrivate()) {
+                        // Make sure we always have at least one normal tab
+                        final Iterable<Tab> tabs = tabsInstance.getTabsInOrder();
+                        boolean removedTabIsLastNormalTab = true;
+                        for (Tab singleTab : tabs) {
+                            if (!singleTab.isPrivate()) {
+                                removedTabIsLastNormalTab = false;
+                                break;
+                            }
+                        }
+                        if (removedTabIsLastNormalTab) {
+                            tabsInstance.addTab();
+                        }
+                    }
+                }
+                break;
 
             case SELECTED:
                 // Update the selected position, then fall through...
@@ -393,5 +415,4 @@ class TabsGridLayout extends GridView
             }
         });
     }
-
 }

@@ -80,6 +80,11 @@ this.ForgetAboutSite = {
       cm.remove(cookie.host, cookie.name, cookie.path, false);
     }
 
+    // EME
+    let mps = Cc["@mozilla.org/gecko-media-plugin-service;1"].
+               getService(Ci.mozIGeckoMediaPluginService);
+    mps.forgetThisSite(aDomain);
+
     // Plugin data
     const phInterface = Ci.nsIPluginHost;
     const FLAG_CLEAR_ALL = phInterface.FLAG_CLEAR_ALL;
@@ -103,7 +108,7 @@ this.ForgetAboutSite = {
     }
 
     if (useJSTransfer) {
-      Task.spawn(function() {
+      Task.spawn(function*() {
         let list = yield Downloads.getList(Downloads.ALL);
         list.removeFinished(download => hasRootDomain(
              NetUtil.newURI(download.source.url).host, aDomain));

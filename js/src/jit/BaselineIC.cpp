@@ -6,6 +6,7 @@
 
 #include "jit/BaselineIC.h"
 
+#include "mozilla/Casting.h"
 #include "mozilla/DebugOnly.h"
 #include "mozilla/TemplateLib.h"
 
@@ -13,6 +14,7 @@
 #include "jstypes.h"
 
 #include "builtin/Eval.h"
+#include "builtin/SIMD.h"
 #include "jit/BaselineDebugModeOSR.h"
 #include "jit/BaselineHelpers.h"
 #include "jit/BaselineJIT.h"
@@ -23,6 +25,7 @@
 # include "jit/PerfSpewer.h"
 #endif
 #include "jit/VMFunctions.h"
+#include "js/Conversions.h"
 #include "vm/Opcodes.h"
 #include "vm/TypedArrayCommon.h"
 
@@ -34,6 +37,7 @@
 #include "vm/ScopeObject-inl.h"
 #include "vm/StringObject-inl.h"
 
+using mozilla::BitwiseCast;
 using mozilla::DebugOnly;
 
 namespace js {
@@ -292,11 +296,6 @@ ICStub::trace(JSTracer *trc)
       case ICStub::TypeUpdate_TypeObject: {
         ICTypeUpdate_TypeObject *updateStub = toTypeUpdate_TypeObject();
         MarkTypeObject(trc, &updateStub->type(), "baseline-update-typeobject");
-        break;
-      }
-      case ICStub::Profiler_PushFunction: {
-        ICProfiler_PushFunction *pushFunStub = toProfiler_PushFunction();
-        MarkScript(trc, &pushFunStub->script(), "baseline-profilerpushfunction-stub-script");
         break;
       }
       case ICStub::GetName_Global: {
@@ -720,66 +719,6 @@ ICStubCompiler::leaveStubFrame(MacroAssembler &masm, bool calledIntoIon)
     EmitLeaveStubFrame(masm, calledIntoIon);
 }
 
-void
-ICStubCompiler::guardProfilingEnabled(MacroAssembler &masm, Register scratch, Label *skip)
-{
-    // This should only be called from the following stubs.
-    MOZ_ASSERT(kind == ICStub::Call_Scripted                             ||
-               kind == ICStub::Call_AnyScripted                          ||
-               kind == ICStub::Call_Native                               ||
-               kind == ICStub::Call_ClassHook                            ||
-               kind == ICStub::Call_ScriptedApplyArray                   ||
-               kind == ICStub::Call_ScriptedApplyArguments               ||
-               kind == ICStub::Call_ScriptedFunCall                      ||
-               kind == ICStub::GetProp_CallScripted                      ||
-               kind == ICStub::GetProp_CallNative                        ||
-               kind == ICStub::GetProp_CallNativePrototype               ||
-               kind == ICStub::GetProp_CallDOMProxyNative                ||
-               kind == ICStub::GetElem_NativePrototypeCallNative         ||
-               kind == ICStub::GetElem_NativePrototypeCallScripted       ||
-               kind == ICStub::GetProp_CallDOMProxyWithGenerationNative  ||
-               kind == ICStub::GetProp_DOMProxyShadowed                  ||
-               kind == ICStub::SetProp_CallScripted                      ||
-               kind == ICStub::SetProp_CallNative);
-
-    // Guard on bit in frame that indicates if the SPS frame was pushed in the first
-    // place.  This code is expected to be called from within a stub that has already
-    // entered a stub frame.
-    MOZ_ASSERT(entersStubFrame_);
-    masm.loadPtr(Address(BaselineFrameReg, 0), scratch);
-    masm.branchTest32(Assembler::Zero,
-                      Address(scratch, BaselineFrame::reverseOffsetOfFlags()),
-                      Imm32(BaselineFrame::HAS_PUSHED_SPS_FRAME),
-                      skip);
-
-    // Check if profiling is enabled
-    uint32_t *enabledAddr = cx->runtime()->spsProfiler.addressOfEnabled();
-    masm.branch32(Assembler::Equal, AbsoluteAddress(enabledAddr), Imm32(0), skip);
-}
-
-void
-ICStubCompiler::emitProfilingUpdate(MacroAssembler &masm, Register pcIdx, Register scratch,
-                                    uint32_t stubPcOffset)
-{
-    Label skipProfilerUpdate;
-
-    // Check if profiling is enabled.
-    guardProfilingEnabled(masm, scratch, &skipProfilerUpdate);
-
-    // Update profiling entry before leaving function.
-    masm.load32(Address(BaselineStubReg, stubPcOffset), pcIdx);
-    masm.spsUpdatePCIdx(&cx->runtime()->spsProfiler, pcIdx, scratch);
-
-    masm.bind(&skipProfilerUpdate);
-}
-
-void
-ICStubCompiler::emitProfilingUpdate(MacroAssembler &masm, GeneralRegisterSet regs,
-                                    uint32_t stubPcOffset)
-{
-    emitProfilingUpdate(masm, regs.takeAny(), regs.takeAny(), stubPcOffset);
-}
-
 inline bool
 ICStubCompiler::emitPostWriteBarrierSlot(MacroAssembler &masm, Register obj, ValueOperand val,
                                          Register scratch, GeneralRegisterSet saveRegs)
@@ -860,15 +799,8 @@ EnsureCanEnterIon(JSContext *cx, ICWarmUpCounter_Fallback *stub, BaselineFrame *
 
     if (isLoopEntry) {
         IonScript *ion = script->ionScript();
-        MOZ_ASSERT(cx->runtime()->spsProfiler.enabled() == ion->hasSPSInstrumentation());
+        MOZ_ASSERT(cx->runtime()->spsProfiler.enabled() == ion->hasProfilingInstrumentation());
         MOZ_ASSERT(ion->osrPc() == pc);
-
-        // If the baseline frame's SPS handling doesn't match up with the Ion code's SPS
-        // handling, don't OSR.
-        if (frame->hasPushedSPSFrame() != ion->hasSPSInstrumentation()) {
-            JitSpew(JitSpew_BaselineOSR, "  OSR crosses SPS handling boundaries, skipping!");
-            return true;
-        }
 
         JitSpew(JitSpew_BaselineOSR, "  OSR possible!");
         *jitcodePtr = ion->method()->raw() + ion->osrEntryOffset();
@@ -1075,6 +1007,29 @@ ICWarmUpCounter_Fallback::Compiler::generateStubCode(MacroAssembler &masm)
     // the stack.
     masm.pop(scratchReg);
 
+#ifdef DEBUG
+    // If profiler instrumentation is on, ensure that lastProfilingFrame is
+    // the frame currently being OSR-ed
+    {
+        Label checkOk;
+        AbsoluteAddress addressOfEnabled(cx->runtime()->spsProfiler.addressOfEnabled());
+        masm.branch32(Assembler::Equal, addressOfEnabled, Imm32(0), &checkOk);
+        masm.loadPtr(AbsoluteAddress((void*)&cx->runtime()->jitActivation), scratchReg);
+        masm.loadPtr(Address(scratchReg, JitActivation::offsetOfLastProfilingFrame()), scratchReg);
+
+        // It may be the case that we entered the baseline frame with
+        // profiling turned off on, then in a call within a loop (i.e. a
+        // callee frame), turn on profiling, then return to this frame,
+        // and then OSR with profiling turned on.  In this case, allow for
+        // lastProfilingFrame to be null.
+        masm.branchPtr(Assembler::Equal, scratchReg, Imm32(0), &checkOk);
+
+        masm.branchPtr(Assembler::Equal, scratchReg, BaselineStackReg, &checkOk);
+        masm.assumeUnreachable("Baseline OSR lastProfilingFrame mismatch.");
+        masm.bind(&checkOk);
+    }
+#endif
+
     // Jump into Ion.
     masm.loadPtr(Address(osrDataReg, offsetof(IonOsrTempData, jitcode)), scratchReg);
     masm.loadPtr(Address(osrDataReg, offsetof(IonOsrTempData, baselineFrame)), OsrFrameReg);
@@ -1086,99 +1041,6 @@ ICWarmUpCounter_Fallback::Compiler::generateStubCode(MacroAssembler &masm)
     return true;
 }
 
-//
-// ICProfile_Fallback
-//
-
-static bool
-DoProfilerFallback(JSContext *cx, BaselineFrame *frame, ICProfiler_Fallback *stub)
-{
-    RootedScript script(cx, frame->script());
-    RootedFunction func(cx, frame->maybeFun());
-    mozilla::DebugOnly<ICEntry *> icEntry = stub->icEntry();
-
-    FallbackICSpew(cx, stub, "Profiler");
-
-    SPSProfiler *profiler = &cx->runtime()->spsProfiler;
-
-    // Manually enter SPS this time.
-    MOZ_ASSERT(profiler->enabled());
-    if (!cx->runtime()->spsProfiler.enter(script, func))
-        return false;
-    frame->setPushedSPSFrame();
-
-    // Unlink any existing PushFunction stub (which may hold stale 'const char *' to
-    // the profile string.
-    MOZ_ASSERT_IF(icEntry->firstStub() != stub,
-                  icEntry->firstStub()->isProfiler_PushFunction() &&
-                  icEntry->firstStub()->next() == stub);
-    stub->unlinkStubsWithKind(cx, ICStub::Profiler_PushFunction);
-    MOZ_ASSERT(icEntry->firstStub() == stub);
-
-    // Generate the string to use to identify this stack frame.
-    const char *string = profiler->profileString(script, func);
-    if (string == nullptr)
-        return false;
-
-    JitSpew(JitSpew_BaselineIC, "  Generating Profiler_PushFunction stub for %s:%d",
-            script->filename(), script->lineno());
-
-    // Create a new optimized stub.
-    ICProfiler_PushFunction::Compiler compiler(cx, string, script);
-    ICStub *optStub = compiler.getStub(compiler.getStubSpace(script));
-    if (!optStub)
-        return false;
-    stub->addNewStub(optStub);
-
-    return true;
-}
-
-typedef bool (*DoProfilerFallbackFn)(JSContext *, BaselineFrame *frame, ICProfiler_Fallback *);
-static const VMFunction DoProfilerFallbackInfo =
-    FunctionInfo<DoProfilerFallbackFn>(DoProfilerFallback, TailCall);
-
-bool
-ICProfiler_Fallback::Compiler::generateStubCode(MacroAssembler &masm)
-{
-    EmitRestoreTailCallReg(masm);
-
-    masm.push(BaselineStubReg);         // Push stub.
-    masm.pushBaselineFramePtr(BaselineFrameReg, R0.scratchReg()); // Push frame.
-
-    return tailCallVM(DoProfilerFallbackInfo, masm);
-}
-
-bool
-ICProfiler_PushFunction::Compiler::generateStubCode(MacroAssembler &masm)
-{
-
-    Register scratch = R0.scratchReg();
-    Register scratch2 = R1.scratchReg();
-
-    // Profiling should be enabled if we ever reach here.
-#ifdef DEBUG
-    Label spsEnabled;
-    uint32_t *enabledAddr = cx->runtime()->spsProfiler.addressOfEnabled();
-    masm.branch32(Assembler::NotEqual, AbsoluteAddress(enabledAddr), Imm32(0), &spsEnabled);
-    masm.assumeUnreachable("Profiling should have been enabled.");
-    masm.bind(&spsEnabled);
-#endif
-
-    // Push SPS entry.
-    masm.spsPushFrame(&cx->runtime()->spsProfiler,
-                      Address(BaselineStubReg, ICProfiler_PushFunction::offsetOfStr()),
-                      Address(BaselineStubReg, ICProfiler_PushFunction::offsetOfScript()),
-                      scratch,
-                      scratch2);
-
-    // Mark frame as having profiler entry pushed.
-    Address flagsOffset(BaselineFrameReg, BaselineFrame::reverseOffsetOfFlags());
-    masm.or32(Imm32(BaselineFrame::HAS_PUSHED_SPS_FRAME), flagsOffset);
-
-    EmitReturnFromIC(masm);
-
-    return true;
-}
 
 //
 // TypeMonitor_Fallback
@@ -2780,28 +2642,17 @@ ICBinaryArith_Fallback::Compiler::generateStubCode(MacroAssembler &masm)
 }
 
 static bool
-DoConcatStrings(JSContext *cx, HandleValue lhs, HandleValue rhs, MutableHandleValue res)
+DoConcatStrings(JSContext *cx, HandleString lhs, HandleString rhs, MutableHandleValue res)
 {
-    MOZ_ASSERT(lhs.isString());
-    MOZ_ASSERT(rhs.isString());
-    JSString *lstr = lhs.toString();
-    JSString *rstr = rhs.toString();
-    JSString *result = ConcatStrings<NoGC>(cx, lstr, rstr);
-    if (result) {
-        res.set(StringValue(result));
-        return true;
-    }
-
-    RootedString rootedl(cx, lstr), rootedr(cx, rstr);
-    result = ConcatStrings<CanGC>(cx, rootedl, rootedr);
+    JSString *result = ConcatStrings<CanGC>(cx, lhs, rhs);
     if (!result)
         return false;
 
-    res.set(StringValue(result));
+    res.setString(result);
     return true;
 }
 
-typedef bool (*DoConcatStringsFn)(JSContext *, HandleValue, HandleValue, MutableHandleValue);
+typedef bool (*DoConcatStringsFn)(JSContext *, HandleString, HandleString, MutableHandleValue);
 static const VMFunction DoConcatStringsInfo = FunctionInfo<DoConcatStringsFn>(DoConcatStrings, TailCall);
 
 bool
@@ -2814,8 +2665,11 @@ ICBinaryArith_StringConcat::Compiler::generateStubCode(MacroAssembler &masm)
     // Restore the tail call register.
     EmitRestoreTailCallReg(masm);
 
-    masm.pushValue(R1);
-    masm.pushValue(R0);
+    masm.unboxString(R0, R0.scratchReg());
+    masm.unboxString(R1, R1.scratchReg());
+
+    masm.push(R1.scratchReg());
+    masm.push(R0.scratchReg());
     if (!tailCallVM(DoConcatStringsInfo, masm))
         return false;
 
@@ -3061,7 +2915,7 @@ ICBinaryArith_DoubleWithInt32::Compiler::generateStubCode(MacroAssembler &masm)
         masm.push(intReg);
         masm.setupUnalignedABICall(1, scratchReg);
         masm.passABIArg(FloatReg0, MoveOp::DOUBLE);
-        masm.callWithABI(JS_FUNC_TO_DATA_PTR(void *, js::ToInt32));
+        masm.callWithABI(mozilla::BitwiseCast<void*, int32_t(*)(double)>(JS::ToInt32));
         masm.storeCallResult(scratchReg);
         masm.pop(intReg);
 
@@ -3210,7 +3064,7 @@ ICUnaryArith_Double::Compiler::generateStubCode(MacroAssembler &masm)
         masm.bind(&truncateABICall);
         masm.setupUnalignedABICall(1, scratchReg);
         masm.passABIArg(FloatReg0, MoveOp::DOUBLE);
-        masm.callWithABI(JS_FUNC_TO_DATA_PTR(void *, js::ToInt32));
+        masm.callWithABI(BitwiseCast<void*, int32_t(*)(double)>(JS::ToInt32));
         masm.storeCallResult(scratchReg);
 
         masm.bind(&doneTruncate);
@@ -3373,7 +3227,7 @@ EffectlesslyLookupProperty(JSContext *cx, HandleObject obj, HandlePropertyName n
     }
 
     if (checkObj->hasIdempotentProtoChain()) {
-        if (!JSObject::lookupProperty(cx, checkObj, name, holder, shape))
+        if (!LookupProperty(cx, checkObj, name, holder, shape))
             return false;
     } else if (checkObj->isNative()) {
         shape.set(checkObj->as<NativeObject>().lookup(cx, NameToId(name)));
@@ -4219,9 +4073,6 @@ ICGetElemNativeCompiler::emitCallNative(MacroAssembler &masm, Register objReg)
 
     regs.add(objReg);
 
-    // Profiler hook.
-    emitProfilingUpdate(masm, regs, ICGetElemNativeGetterStub::offsetOfPCOffset());
-
     // Call helper.
     if (!callVM(DoCallNativeGetterInfo, masm))
         return false;
@@ -4266,7 +4117,7 @@ ICGetElemNativeCompiler::emitCallScripted(MacroAssembler &masm, Register objReg)
 
     Register code = regs.takeAnyExcluding(ArgumentsRectifierReg);
     masm.loadPtr(Address(callee, JSFunction::offsetOfNativeOrScript()), code);
-    masm.loadBaselineOrIonRaw(code, code, SequentialExecution, nullptr);
+    masm.loadBaselineOrIonRaw(code, code, nullptr);
 
     Register scratch = regs.takeAny();
 
@@ -4279,7 +4130,7 @@ ICGetElemNativeCompiler::emitCallScripted(MacroAssembler &masm, Register objReg)
         MOZ_ASSERT(ArgumentsRectifierReg != code);
 
         JitCode *argumentsRectifier =
-            cx->runtime()->jitRuntime()->getArgumentsRectifier(SequentialExecution);
+            cx->runtime()->jitRuntime()->getArgumentsRectifier();
 
         masm.movePtr(ImmGCPtr(argumentsRectifier), code);
         masm.loadPtr(Address(code, JitCode::offsetOfCode()), code);
@@ -4287,16 +4138,6 @@ ICGetElemNativeCompiler::emitCallScripted(MacroAssembler &masm, Register objReg)
     }
 
     masm.bind(&noUnderflow);
-
-    // If needed, update SPS Profiler frame entry.  At this point, callee and scratch can
-    // be clobbered.
-    {
-        GeneralRegisterSet availRegs = availableGeneralRegs(0);
-        availRegs.take(ArgumentsRectifierReg);
-        availRegs.take(code);
-        emitProfilingUpdate(masm, availRegs, ICGetElemNativeGetterStub::offsetOfPCOffset());
-    }
-
     masm.callJit(code);
 
     leaveStubFrame(masm, true);
@@ -4499,8 +4340,7 @@ ICGetElemNativeCompiler::generateStubCode(MacroAssembler &masm)
                          scratchReg);
             masm.branchIfFunctionHasNoScript(scratchReg, popR1 ? &failurePopR1 : &failure);
             masm.loadPtr(Address(scratchReg, JSFunction::offsetOfNativeOrScript()), scratchReg);
-            masm.loadBaselineOrIonRaw(scratchReg, scratchReg, SequentialExecution,
-                                      popR1 ? &failurePopR1 : &failure);
+            masm.loadBaselineOrIonRaw(scratchReg, scratchReg, popR1 ? &failurePopR1 : &failure);
 
             // At this point, we are guaranteed to successfully complete.
             if (popR1)
@@ -6933,7 +6773,7 @@ ComputeGetPropResult(JSContext *cx, BaselineFrame *frame, JSOp op, HandlePropert
             return false;
 
         RootedId id(cx, NameToId(name));
-        if (!JSObject::getGeneric(cx, obj, obj, id, res))
+        if (!GetProperty(cx, obj, obj, id, res))
             return false;
 
 #if JS_HAS_NO_SUCH_METHOD
@@ -7426,7 +7266,7 @@ ICGetProp_CallScripted::Compiler::generateStubCode(MacroAssembler &masm)
     masm.loadPtr(Address(BaselineStubReg, ICGetProp_CallScripted::offsetOfGetter()), callee);
     masm.branchIfFunctionHasNoScript(callee, &failureLeaveStubFrame);
     masm.loadPtr(Address(callee, JSFunction::offsetOfNativeOrScript()), code);
-    masm.loadBaselineOrIonRaw(code, code, SequentialExecution, &failureLeaveStubFrame);
+    masm.loadBaselineOrIonRaw(code, code, &failureLeaveStubFrame);
 
     // Getter is called with 0 arguments, just |obj| as thisv.
     // Note that we use Push, not push, so that callJit will align the stack
@@ -7446,7 +7286,7 @@ ICGetProp_CallScripted::Compiler::generateStubCode(MacroAssembler &masm)
         MOZ_ASSERT(ArgumentsRectifierReg != code);
 
         JitCode *argumentsRectifier =
-            cx->runtime()->jitRuntime()->getArgumentsRectifier(SequentialExecution);
+            cx->runtime()->jitRuntime()->getArgumentsRectifier();
 
         masm.movePtr(ImmGCPtr(argumentsRectifier), code);
         masm.loadPtr(Address(code, JitCode::offsetOfCode()), code);
@@ -7454,16 +7294,6 @@ ICGetProp_CallScripted::Compiler::generateStubCode(MacroAssembler &masm)
     }
 
     masm.bind(&noUnderflow);
-
-    // If needed, update SPS Profiler frame entry.  At this point, callee and scratch can
-    // be clobbered.
-    {
-        GeneralRegisterSet availRegs = availableGeneralRegs(0);
-        availRegs.take(ArgumentsRectifierReg);
-        availRegs.take(code);
-        emitProfilingUpdate(masm, availRegs, ICGetProp_CallScripted::offsetOfPCOffset());
-    }
-
     masm.callJit(code);
 
     leaveStubFrame(masm, true);
@@ -7524,9 +7354,6 @@ ICGetProp_CallNative::Compiler::generateStubCode(MacroAssembler &masm)
     regs.add(scratch);
     if (!inputDefinitelyObject_)
         regs.add(R0);
-
-    // If needed, update SPS Profiler frame entry.
-    emitProfilingUpdate(masm, regs, ICGetProp_CallNative::offsetOfPCOffset());
 
     if (!callVM(DoCallNativeGetterInfo, masm))
         return false;
@@ -7596,9 +7423,6 @@ ICGetProp_CallNativePrototype::Compiler::generateStubCode(MacroAssembler &masm)
         regs.add(R0);
     else
         regs.add(objReg);
-
-    // If needed, update SPS Profiler frame entry.
-    emitProfilingUpdate(masm, regs, ICGetProp_CallNativePrototype::offsetOfPCOffset());
 
     if (!callVM(DoCallNativeGetterInfo, masm))
         return false;
@@ -7670,9 +7494,6 @@ ICGetPropCallDOMProxyNativeCompiler::generateStubCode(MacroAssembler &masm,
     // Don't have to preserve R0 anymore.
     regs.add(R0);
 
-    // If needed, update SPS Profiler frame entry.
-    emitProfilingUpdate(masm, regs, ICGetProp_CallDOMProxyNative::offsetOfPCOffset());
-
     if (!callVM(DoCallNativeGetterInfo, masm))
         return false;
     leaveStubFrame(masm);
@@ -7712,6 +7533,8 @@ ICGetPropCallDOMProxyNativeCompiler::getStub(ICStubSpace *space)
     Value expandoVal;
     if (kind == ICStub::GetProp_CallDOMProxyNative) {
         expandoVal = expandoSlot;
+        expandoAndGeneration = nullptr;  // initialize to silence GCC warning
+        generation = 0;  // initialize to silence GCC warning
     } else {
         MOZ_ASSERT(kind == ICStub::GetProp_CallDOMProxyWithGenerationNative);
         MOZ_ASSERT(!expandoSlot.isObject() && !expandoSlot.isUndefined());
@@ -7804,9 +7627,6 @@ ICGetProp_DOMProxyShadowed::Compiler::generateStubCode(MacroAssembler &masm)
 
     // Don't have to preserve R0 anymore.
     regs.add(R0);
-
-    // If needed, update SPS Profiler frame entry.
-    emitProfilingUpdate(masm, regs, ICGetProp_DOMProxyShadowed::offsetOfPCOffset());
 
     if (!callVM(ProxyGetInfo, masm))
         return false;
@@ -8302,7 +8122,7 @@ DoSetPropFallback(JSContext *cx, BaselineFrame *frame, ICSetProp_Fallback *stub_
 
     if (op == JSOP_INITPROP) {
         MOZ_ASSERT(obj->is<PlainObject>());
-        if (!DefineNativeProperty(cx, obj.as<PlainObject>(), id, rhs,
+        if (!NativeDefineProperty(cx, obj.as<PlainObject>(), id, rhs,
                                   nullptr, nullptr, JSPROP_ENUMERATE))
         {
             return false;
@@ -8798,7 +8618,7 @@ ICSetProp_CallScripted::Compiler::generateStubCode(MacroAssembler &masm)
     masm.loadPtr(Address(BaselineStubReg, ICSetProp_CallScripted::offsetOfSetter()), callee);
     masm.branchIfFunctionHasNoScript(callee, &failureLeaveStubFrame);
     masm.loadPtr(Address(callee, JSFunction::offsetOfNativeOrScript()), code);
-    masm.loadBaselineOrIonRaw(code, code, SequentialExecution, &failureLeaveStubFrame);
+    masm.loadBaselineOrIonRaw(code, code, &failureLeaveStubFrame);
 
     // Setter is called with the new value as the only argument, and |obj| as thisv.
     // Note that we use Push, not push, so that callJit will align the stack
@@ -8823,7 +8643,7 @@ ICSetProp_CallScripted::Compiler::generateStubCode(MacroAssembler &masm)
         MOZ_ASSERT(ArgumentsRectifierReg != code);
 
         JitCode *argumentsRectifier =
-            cx->runtime()->jitRuntime()->getArgumentsRectifier(SequentialExecution);
+            cx->runtime()->jitRuntime()->getArgumentsRectifier();
 
         masm.movePtr(ImmGCPtr(argumentsRectifier), code);
         masm.loadPtr(Address(code, JitCode::offsetOfCode()), code);
@@ -8831,16 +8651,6 @@ ICSetProp_CallScripted::Compiler::generateStubCode(MacroAssembler &masm)
     }
 
     masm.bind(&noUnderflow);
-
-    // If needed, update SPS Profiler frame entry.  At this point, callee and scratch can
-    // be clobbered.
-    {
-        GeneralRegisterSet availRegs = availableGeneralRegs(0);
-        availRegs.take(ArgumentsRectifierReg);
-        availRegs.take(code);
-        emitProfilingUpdate(masm, availRegs, ICSetProp_CallScripted::offsetOfPCOffset());
-    }
-
     masm.callJit(code);
 
     leaveStubFrame(masm, true);
@@ -8925,9 +8735,6 @@ ICSetProp_CallNative::Compiler::generateStubCode(MacroAssembler &masm)
 
     // Don't need to preserve R0 anymore.
     regs.add(R0);
-
-    // If needed, update SPS Profiler frame entry.
-    emitProfilingUpdate(masm, regs, ICSetProp_CallNative::offsetOfPCOffset());
 
     if (!callVM(DoCallNativeSetterInfo, masm))
         return false;
@@ -9036,7 +8843,7 @@ TryAttachFunCallStub(JSContext *cx, ICCall_Fallback *stub, HandleScript script, 
 
 static bool
 GetTemplateObjectForNative(JSContext *cx, HandleScript script, jsbytecode *pc,
-                           Native native, const CallArgs &args, MutableHandleNativeObject res)
+                           Native native, const CallArgs &args, MutableHandleObject res)
 {
     // Check for natives to which template objects can be attached. This is
     // done to provide templates to Ion for inlining these natives later on.
@@ -9105,6 +8912,22 @@ GetTemplateObjectForNative(JSContext *cx, HandleScript script, jsbytecode *pc,
         return true;
     }
 
+    if (native == obj_create && args.length() == 1 && args[0].isObjectOrNull()) {
+        RootedObject proto(cx, args[0].toObjectOrNull());
+        res.set(ObjectCreateImpl(cx, proto, TenuredObject));
+        if (!res)
+            return false;
+        return true;
+    }
+
+    if (native == js::simd_int32x4_add && JitSupportsSimd()) {
+        Rooted<TypeDescr *> descr(cx, &Int32x4::GetTypeDescr(*cx->global()));
+        res.set(TypedObject::createZeroed(cx, descr, 0, gc::TenuredHeap));
+        if (!res)
+            return false;
+        return true;
+    }
+
     return true;
 }
 
@@ -9121,7 +8944,7 @@ GetTemplateObjectForClassHook(JSContext *cx, JSNative hook, CallArgs &args,
         return true;
     }
 
-    if (hook == SimdTypeDescr::call) {
+    if (hook == SimdTypeDescr::call && JitSupportsSimd()) {
         Rooted<SimdTypeDescr *> descr(cx, &args.callee().as<SimdTypeDescr>());
         JSObject *obj = TypedObject::createZeroed(cx, descr, 0, gc::TenuredHeap);
         if (!obj)
@@ -9262,23 +9085,27 @@ TryAttachCallStub(JSContext *cx, ICCall_Fallback *stub, HandleScript script, jsb
         // as a constructor, for later use during Ion compilation.
         RootedPlainObject templateObject(cx);
         if (constructing) {
-            templateObject = CreateThisForFunction(cx, fun, MaybeSingletonObject);
-            if (!templateObject)
+            JSObject *thisObject = CreateThisForFunction(cx, fun, MaybeSingletonObject);
+            if (!thisObject)
                 return false;
 
-            // If we are calling a constructor for which the new script
-            // properties analysis has not been performed yet, don't attach a
-            // stub. After the analysis is performed, CreateThisForFunction may
-            // start returning objects with a different type, and the Ion
-            // compiler might get confused.
-            if (templateObject->type()->newScript() &&
-                !templateObject->type()->newScript()->analyzed())
-            {
-                // Clear the object just created from the preliminary objects
-                // on the TypeNewScript, as it will not be used or filled in by
-                // running code.
-                templateObject->type()->newScript()->unregisterNewObject(templateObject);
-                return true;
+            if (thisObject->is<PlainObject>()) {
+                templateObject = &thisObject->as<PlainObject>();
+
+                // If we are calling a constructor for which the new script
+                // properties analysis has not been performed yet, don't attach a
+                // stub. After the analysis is performed, CreateThisForFunction may
+                // start returning objects with a different type, and the Ion
+                // compiler might get confused.
+                if (templateObject->type()->newScript() &&
+                    !templateObject->type()->newScript()->analyzed())
+                {
+                    // Clear the object just created from the preliminary objects
+                    // on the TypeNewScript, as it will not be used or filled in by
+                    // running code.
+                    templateObject->type()->newScript()->unregisterNewObject(templateObject);
+                    return true;
+                }
             }
         }
 
@@ -9339,7 +9166,7 @@ TryAttachCallStub(JSContext *cx, ICCall_Fallback *stub, HandleScript script, jsb
             return true;
         }
 
-        RootedNativeObject templateObject(cx);
+        RootedObject templateObject(cx);
         if (MOZ_LIKELY(!isSpread)) {
             CallArgs args = CallArgsFromVp(argc, vp);
             if (!GetTemplateObjectForNative(cx, script, pc, fun->native(), args, &templateObject))
@@ -9477,10 +9304,6 @@ DoCallFallback(JSContext *cx, BaselineFrame *frame, ICCall_Fallback *stub_, uint
     if (!TryAttachCallStub(cx, stub, script, pc, op, argc, vp, constructing, false, newType))
         return false;
 
-    // Maybe update PC in profiler entry before leaving this script by call.
-    if (cx->runtime()->spsProfiler.enabled() && frame->hasPushedSPSFrame())
-        cx->runtime()->spsProfiler.updatePC(script, pc);
-
     if (!MaybeCloneFunctionAtCallsite(cx, &callee, script, pc))
         return false;
 
@@ -9552,10 +9375,6 @@ DoSpreadCallFallback(JSContext *cx, BaselineFrame *frame, ICCall_Fallback *stub_
     {
         return false;
     }
-
-    // Maybe update PC in profiler entry before leaving this script by call.
-    if (cx->runtime()->spsProfiler.enabled() && frame->hasPushedSPSFrame())
-        cx->runtime()->spsProfiler.updatePC(script, pc);
 
     if (!MaybeCloneFunctionAtCallsite(cx, &callee, script, pc))
         return false;
@@ -9765,7 +9584,7 @@ ICCallStubCompiler::guardFunApply(MacroAssembler &masm, GeneralRegisterSet regs,
         masm.branchIfFunctionHasNoScript(target, failure);
         Register temp = regs.takeAny();
         masm.loadPtr(Address(target, JSFunction::offsetOfNativeOrScript()), temp);
-        masm.loadBaselineOrIonRaw(temp, temp, SequentialExecution, failure);
+        masm.loadBaselineOrIonRaw(temp, temp, failure);
         regs.add(temp);
     }
     return target;
@@ -10000,7 +9819,7 @@ ICCallScriptedCompiler::generateStubCode(MacroAssembler &masm)
     Register code;
     if (!isConstructing_) {
         code = regs.takeAny();
-        masm.loadBaselineOrIonRaw(callee, code, SequentialExecution, &failure);
+        masm.loadBaselineOrIonRaw(callee, code, &failure);
     } else {
         Address scriptCode(callee, JSScript::offsetOfBaselineOrIonRaw());
         masm.branchPtr(Assembler::Equal, scriptCode, ImmPtr(nullptr), &failure);
@@ -10084,7 +9903,7 @@ ICCallScriptedCompiler::generateStubCode(MacroAssembler &masm)
         masm.loadPtr(Address(callee, JSFunction::offsetOfNativeOrScript()), callee);
 
         code = regs.takeAny();
-        masm.loadBaselineOrIonRaw(callee, code, SequentialExecution, &failureLeaveStubFrame);
+        masm.loadBaselineOrIonRaw(callee, code, &failureLeaveStubFrame);
 
         // Release callee register, but don't add ExtractTemp0 back into the pool
         // ExtractTemp0 is used later, and if it's allocated to some other register at that
@@ -10128,7 +9947,7 @@ ICCallScriptedCompiler::generateStubCode(MacroAssembler &masm)
         MOZ_ASSERT(ArgumentsRectifierReg != argcReg);
 
         JitCode *argumentsRectifier =
-            cx->runtime()->jitRuntime()->getArgumentsRectifier(SequentialExecution);
+            cx->runtime()->jitRuntime()->getArgumentsRectifier();
 
         masm.movePtr(ImmGCPtr(argumentsRectifier), code);
         masm.loadPtr(Address(code, JitCode::offsetOfCode()), code);
@@ -10136,18 +9955,6 @@ ICCallScriptedCompiler::generateStubCode(MacroAssembler &masm)
     }
 
     masm.bind(&noUnderflow);
-
-    // If needed, update SPS Profiler frame entry before and after call.
-    {
-        MOZ_ASSERT(kind == ICStub::Call_Scripted || kind == ICStub::Call_AnyScripted);
-        GeneralRegisterSet availRegs = availableGeneralRegs(0);
-        availRegs.take(ArgumentsRectifierReg);
-        availRegs.take(code);
-        emitProfilingUpdate(masm, availRegs, kind == ICStub::Call_Scripted ?
-                                                ICCall_Scripted::offsetOfPCOffset()
-                                              : ICCall_AnyScripted::offsetOfPCOffset());
-    }
-
     masm.callJit(code);
 
     // If this is a constructing call, and the callee returns a non-object, replace it with
@@ -10408,10 +10215,6 @@ ICCall_Native::Compiler::generateStubCode(MacroAssembler &masm)
     masm.push(BaselineTailCallReg);
     masm.enterFakeExitFrame(NativeExitFrameLayout::Token());
 
-    // If needed, update SPS Profiler frame entry.  At this point, BaselineTailCallReg
-    // and scratch can be clobbered.
-    emitProfilingUpdate(masm, BaselineTailCallReg, scratch, ICCall_Native::offsetOfPCOffset());
-
     // Execute call.
     masm.setupUnalignedABICall(3, scratch);
     masm.loadJSContext(scratch);
@@ -10507,10 +10310,6 @@ ICCall_ClassHook::Compiler::generateStubCode(MacroAssembler &masm)
     masm.push(BaselineTailCallReg);
     masm.enterFakeExitFrame(NativeExitFrameLayout::Token());
 
-    // If needed, update SPS Profiler frame entry.  At this point, BaselineTailCallReg
-    // and scratch can be clobbered.
-    emitProfilingUpdate(masm, BaselineTailCallReg, scratch, ICCall_ClassHook::offsetOfPCOffset());
-
     // Execute call.
     masm.setupUnalignedABICall(3, scratch);
     masm.loadJSContext(scratch);
@@ -10605,7 +10404,7 @@ ICCall_ScriptedApplyArray::Compiler::generateStubCode(MacroAssembler &masm)
     // Load nargs into scratch for underflow check, and then load jitcode pointer into target.
     masm.load16ZeroExtend(Address(target, JSFunction::offsetOfNargs()), scratch);
     masm.loadPtr(Address(target, JSFunction::offsetOfNativeOrScript()), target);
-    masm.loadBaselineOrIonRaw(target, target, SequentialExecution, nullptr);
+    masm.loadBaselineOrIonRaw(target, target, nullptr);
 
     // Handle arguments underflow.
     Label noUnderflow;
@@ -10616,7 +10415,7 @@ ICCall_ScriptedApplyArray::Compiler::generateStubCode(MacroAssembler &masm)
         MOZ_ASSERT(ArgumentsRectifierReg != argcReg);
 
         JitCode *argumentsRectifier =
-            cx->runtime()->jitRuntime()->getArgumentsRectifier(SequentialExecution);
+            cx->runtime()->jitRuntime()->getArgumentsRectifier();
 
         masm.movePtr(ImmGCPtr(argumentsRectifier), target);
         masm.loadPtr(Address(target, JitCode::offsetOfCode()), target);
@@ -10624,11 +10423,6 @@ ICCall_ScriptedApplyArray::Compiler::generateStubCode(MacroAssembler &masm)
     }
     masm.bind(&noUnderflow);
     regs.add(argcReg);
-
-    // If needed, update SPS Profiler frame entry.  At this point, BaselineTailCallReg
-    // and scratch can be clobbered.
-    emitProfilingUpdate(masm, regs.getAny(), scratch,
-                        ICCall_ScriptedApplyArguments::offsetOfPCOffset());
 
     // Do call
     masm.callJit(target);
@@ -10706,7 +10500,7 @@ ICCall_ScriptedApplyArguments::Compiler::generateStubCode(MacroAssembler &masm)
     // Load nargs into scratch for underflow check, and then load jitcode pointer into target.
     masm.load16ZeroExtend(Address(target, JSFunction::offsetOfNargs()), scratch);
     masm.loadPtr(Address(target, JSFunction::offsetOfNativeOrScript()), target);
-    masm.loadBaselineOrIonRaw(target, target, SequentialExecution, nullptr);
+    masm.loadBaselineOrIonRaw(target, target, nullptr);
 
     // Handle arguments underflow.
     Label noUnderflow;
@@ -10717,7 +10511,7 @@ ICCall_ScriptedApplyArguments::Compiler::generateStubCode(MacroAssembler &masm)
         MOZ_ASSERT(ArgumentsRectifierReg != argcReg);
 
         JitCode *argumentsRectifier =
-            cx->runtime()->jitRuntime()->getArgumentsRectifier(SequentialExecution);
+            cx->runtime()->jitRuntime()->getArgumentsRectifier();
 
         masm.movePtr(ImmGCPtr(argumentsRectifier), target);
         masm.loadPtr(Address(target, JitCode::offsetOfCode()), target);
@@ -10725,11 +10519,6 @@ ICCall_ScriptedApplyArguments::Compiler::generateStubCode(MacroAssembler &masm)
     }
     masm.bind(&noUnderflow);
     regs.add(argcReg);
-
-    // If needed, update SPS Profiler frame entry.  At this point, BaselineTailCallReg
-    // and scratch can be clobbered.
-    emitProfilingUpdate(masm, regs.getAny(), scratch,
-                        ICCall_ScriptedApplyArguments::offsetOfPCOffset());
 
     // Do call
     masm.callJit(target);
@@ -10786,7 +10575,7 @@ ICCall_ScriptedFunCall::Compiler::generateStubCode(MacroAssembler &masm)
 
     // Load the start of the target JitCode.
     Register code = regs.takeAny();
-    masm.loadBaselineOrIonRaw(callee, code, SequentialExecution, &failure);
+    masm.loadBaselineOrIonRaw(callee, code, &failure);
 
     // We no longer need R1.
     regs.add(R1);
@@ -10839,7 +10628,7 @@ ICCall_ScriptedFunCall::Compiler::generateStubCode(MacroAssembler &masm)
         MOZ_ASSERT(ArgumentsRectifierReg != argcReg);
 
         JitCode *argumentsRectifier =
-            cx->runtime()->jitRuntime()->getArgumentsRectifier(SequentialExecution);
+            cx->runtime()->jitRuntime()->getArgumentsRectifier();
 
         masm.movePtr(ImmGCPtr(argumentsRectifier), code);
         masm.loadPtr(Address(code, JitCode::offsetOfCode()), code);
@@ -10847,16 +10636,6 @@ ICCall_ScriptedFunCall::Compiler::generateStubCode(MacroAssembler &masm)
     }
 
     masm.bind(&noUnderflow);
-
-    // If needed, update SPS Profiler frame entry.
-    {
-        // Need to avoid using ArgumentsRectifierReg and code register.
-        GeneralRegisterSet availRegs = availableGeneralRegs(0);
-        availRegs.take(ArgumentsRectifierReg);
-        availRegs.take(code);
-        emitProfilingUpdate(masm, availRegs, ICCall_ScriptedFunCall::offsetOfPCOffset());
-    }
-
     masm.callJit(code);
 
     leaveStubFrame(masm, true);
@@ -11509,13 +11288,6 @@ ICRetSub_Resume::Compiler::generateStubCode(MacroAssembler &masm)
     return true;
 }
 
-ICProfiler_PushFunction::ICProfiler_PushFunction(JitCode *stubCode, const char *str,
-                                                 HandleScript script)
-  : ICStub(ICStub::Profiler_PushFunction, stubCode),
-    str_(str),
-    script_(script)
-{ }
-
 ICTypeMonitor_SingleObject::ICTypeMonitor_SingleObject(JitCode *stubCode, HandleObject obj)
   : ICStub(TypeMonitor_SingleObject, stubCode),
     obj_(obj)
@@ -11984,7 +11756,7 @@ ICCall_AnyScripted::Clone(JSContext *, ICStubSpace *space, ICStub *firstMonitorS
 }
 
 ICCall_Native::ICCall_Native(JitCode *stubCode, ICStub *firstMonitorStub,
-                             HandleFunction callee, HandleNativeObject templateObject,
+                             HandleFunction callee, HandleObject templateObject,
                              uint32_t pcOffset)
   : ICMonitoredStub(ICStub::Call_Native, stubCode, firstMonitorStub),
     callee_(callee),
@@ -12005,7 +11777,7 @@ ICCall_Native::Clone(JSContext *cx, ICStubSpace *space, ICStub *firstMonitorStub
                      ICCall_Native &other)
 {
     RootedFunction callee(cx, other.callee_);
-    RootedNativeObject templateObject(cx, other.templateObject_);
+    RootedObject templateObject(cx, other.templateObject_);
     return New(space, other.jitCode(), firstMonitorStub, callee, templateObject,
                other.pcOffset_);
 }

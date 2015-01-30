@@ -54,15 +54,15 @@ GetPNGDecoderAccountingLog()
 #define BYTES_NEEDED_FOR_DIMENSIONS (HEIGHT_OFFSET + 4)
 
 nsPNGDecoder::AnimFrameInfo::AnimFrameInfo()
- : mDispose(FrameBlender::kDisposeKeep)
- , mBlend(FrameBlender::kBlendOver)
+ : mDispose(DisposalMethod::KEEP)
+ , mBlend(BlendMethod::OVER)
  , mTimeout(0)
 { }
 
 #ifdef PNG_APNG_SUPPORTED
 nsPNGDecoder::AnimFrameInfo::AnimFrameInfo(png_structp aPNG, png_infop aInfo)
- : mDispose(FrameBlender::kDisposeKeep)
- , mBlend(FrameBlender::kBlendOver)
+ : mDispose(DisposalMethod::KEEP)
+ , mBlend(BlendMethod::OVER)
  , mTimeout(0)
 {
   png_uint_16 delay_num, delay_den;
@@ -88,17 +88,17 @@ nsPNGDecoder::AnimFrameInfo::AnimFrameInfo(png_structp aPNG, png_infop aInfo)
   }
 
   if (dispose_op == PNG_DISPOSE_OP_PREVIOUS) {
-    mDispose = FrameBlender::kDisposeRestorePrevious;
+    mDispose = DisposalMethod::RESTORE_PREVIOUS;
   } else if (dispose_op == PNG_DISPOSE_OP_BACKGROUND) {
-    mDispose = FrameBlender::kDisposeClear;
+    mDispose = DisposalMethod::CLEAR;
   } else {
-    mDispose = FrameBlender::kDisposeKeep;
+    mDispose = DisposalMethod::KEEP;
   }
 
   if (blend_op == PNG_BLEND_OP_SOURCE) {
-    mBlend = FrameBlender::kBlendSource;
+    mBlend = BlendMethod::SOURCE;
   } else {
-    mBlend = FrameBlender::kBlendOver;
+    mBlend = BlendMethod::OVER;
   }
 }
 #endif
@@ -107,7 +107,7 @@ nsPNGDecoder::AnimFrameInfo::AnimFrameInfo(png_structp aPNG, png_infop aInfo)
 const uint8_t
 nsPNGDecoder::pngSignatureBytes[] = { 137, 80, 78, 71, 13, 10, 26, 10 };
 
-nsPNGDecoder::nsPNGDecoder(RasterImage& aImage)
+nsPNGDecoder::nsPNGDecoder(RasterImage* aImage)
  : Decoder(aImage),
    mPNG(nullptr), mInfo(nullptr),
    mCMSLine(nullptr), interlacebuf(nullptr),
@@ -165,11 +165,6 @@ void nsPNGDecoder::CreateFrame(png_uint_32 x_offset, png_uint_32 y_offset,
     NeedNewFrame(mNumFrames, x_offset, y_offset, width, height, format);
   } else if (mNumFrames != 0) {
     NeedNewFrame(mNumFrames, x_offset, y_offset, width, height, format);
-  } else {
-    // Our preallocated frame matches up, with the possible exception of alpha.
-    if (format == gfx::SurfaceFormat::B8G8R8X8) {
-      currentFrame->SetHasNoAlpha();
-    }
   }
 
   mFrameRect = neededRect;
@@ -185,7 +180,7 @@ void nsPNGDecoder::CreateFrame(png_uint_32 x_offset, png_uint_32 y_offset,
   if (png_get_valid(mPNG, mInfo, PNG_INFO_acTL)) {
     mAnimInfo = AnimFrameInfo(mPNG, mInfo);
 
-    if (mAnimInfo.mDispose == FrameBlender::kDisposeClear) {
+    if (mAnimInfo.mDispose == DisposalMethod::CLEAR) {
       // We may have to display the background under this image during
       // animation playback, so we regard it as transparent.
       PostHasTransparency();
@@ -204,11 +199,9 @@ nsPNGDecoder::EndImageFrame()
 
   mNumFrames++;
 
-  FrameBlender::FrameAlpha alpha;
-  if (mFrameHasNoAlpha) {
-    alpha = FrameBlender::kFrameOpaque;
-  } else {
-    alpha = FrameBlender::kFrameHasAlpha;
+  Opacity opacity = Opacity::SOME_TRANSPARENCY;
+  if (format == gfx::SurfaceFormat::B8G8R8X8 || mFrameHasNoAlpha) {
+    opacity = Opacity::OPAQUE;
   }
 
 #ifdef PNG_APNG_SUPPORTED
@@ -220,7 +213,7 @@ nsPNGDecoder::EndImageFrame()
   }
 #endif
 
-  PostFrameStop(alpha, mAnimInfo.mDispose, mAnimInfo.mTimeout,
+  PostFrameStop(opacity, mAnimInfo.mDispose, mAnimInfo.mTimeout,
                 mAnimInfo.mBlend);
 }
 
@@ -320,8 +313,7 @@ nsPNGDecoder::InitInternal()
 }
 
 void
-nsPNGDecoder::WriteInternal(const char* aBuffer, uint32_t aCount,
-                            DecodeStrategy)
+nsPNGDecoder::WriteInternal(const char* aBuffer, uint32_t aCount)
 {
   NS_ABORT_IF_FALSE(!HasError(), "Shouldn't call WriteInternal after error!");
 
@@ -559,22 +551,25 @@ nsPNGDecoder::info_callback(png_structp png_ptr, png_infop info_ptr)
   }
 
   if (png_get_valid(png_ptr, info_ptr, PNG_INFO_tRNS)) {
-    int sample_max = (1 << bit_depth);
     png_color_16p trans_values;
     png_get_tRNS(png_ptr, info_ptr, &trans, &num_trans, &trans_values);
     // libpng doesn't reject a tRNS chunk with out-of-range samples
     // so we check it here to avoid setting up a useless opacity
-    // channel or producing unexpected transparent pixels when using
-    // libpng-1.2.19 through 1.2.26 (bug #428045)
-    if ((color_type == PNG_COLOR_TYPE_GRAY &&
-         (int)trans_values->gray > sample_max) ||
-         (color_type == PNG_COLOR_TYPE_RGB &&
-         ((int)trans_values->red > sample_max ||
-         (int)trans_values->green > sample_max ||
-         (int)trans_values->blue > sample_max))) {
-      // clear the tRNS valid flag and release tRNS memory
-      png_free_data(png_ptr, info_ptr, PNG_FREE_TRNS, 0);
-    } else {
+    // channel or producing unexpected transparent pixels (bug #428045)
+    if (bit_depth < 16) {
+      png_uint_16 sample_max = (1 << bit_depth) - 1;
+      if ((color_type == PNG_COLOR_TYPE_GRAY &&
+           trans_values->gray > sample_max) ||
+           (color_type == PNG_COLOR_TYPE_RGB &&
+           (trans_values->red > sample_max ||
+           trans_values->green > sample_max ||
+           trans_values->blue > sample_max))) {
+        // clear the tRNS valid flag and release tRNS memory
+        png_free_data(png_ptr, info_ptr, PNG_FREE_TRNS, 0);
+        num_trans = 0;
+      }
+    }
+    if (num_trans != 0) {
       png_set_expand(png_ptr);
     }
   }

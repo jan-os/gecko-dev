@@ -438,7 +438,6 @@ HandleFault(PEXCEPTION_POINTERS exception)
 
     uint8_t **ppc = ContextToPC(context);
     uint8_t *pc = *ppc;
-    MOZ_ASSERT(pc == record->ExceptionAddress);
 
     if (record->NumberParameters < 2)
         return false;
@@ -449,15 +448,13 @@ HandleFault(PEXCEPTION_POINTERS exception)
         return false;
     AutoSetHandlingSignal handling(rt);
 
-    AsmJSActivation *activation = rt->mainThread.asmJSActivationStack();
+    AsmJSActivation *activation = rt->asmJSActivationStack();
     if (!activation)
         return false;
 
-    const AsmJSModule &module = activation->module();
-    if (!module.containsFunctionPC(pc))
-        return false;
-
 # if defined(JS_CODEGEN_X64)
+    const AsmJSModule &module = activation->module();
+
     // These checks aren't necessary, but, since we can, check anyway to make
     // sure we aren't covering up a real bug.
     void *faultingAddress = (void*)record->ExceptionInformation[1];
@@ -465,6 +462,25 @@ HandleFault(PEXCEPTION_POINTERS exception)
         faultingAddress < module.maybeHeap() ||
         faultingAddress >= module.maybeHeap() + AsmJSMappedSize)
     {
+        return false;
+    }
+
+    if (!module.containsFunctionPC(pc)) {
+        // On Windows, it is possible for InterruptRunningCode to execute
+        // between a faulting heap access and the handling of the fault due
+        // to InterruptRunningCode's use of SuspendThread. When this happens,
+        // after ResumeThread, the exception handler is called with pc equal to
+        // module.interruptExit, which is logically wrong. The Right Thing would
+        // be for the OS to make fault-handling atomic (so that CONTEXT.pc was
+        // always the logically-faulting pc). Fortunately, we can detect this
+        // case and silence the exception ourselves (the exception will
+        // retrigger after the interrupt jumps back to resumePC).
+        if (pc == module.interruptExit() &&
+            module.containsFunctionPC(activation->resumePC()) &&
+            module.lookupHeapAccess(activation->resumePC()))
+        {
+            return true;
+        }
         return false;
     }
 
@@ -631,7 +647,7 @@ HandleMachException(JSRuntime *rt, const ExceptionRequest &request)
     if (request.body.exception != EXC_BAD_ACCESS || request.body.codeCnt != 2)
         return false;
 
-    AsmJSActivation *activation = rt->mainThread.asmJSActivationStack();
+    AsmJSActivation *activation = rt->asmJSActivationStack();
     if (!activation)
         return false;
 
@@ -845,7 +861,7 @@ HandleFault(int signum, siginfo_t *info, void *ctx)
         return false;
     AutoSetHandlingSignal handling(rt);
 
-    AsmJSActivation *activation = rt->mainThread.asmJSActivationStack();
+    AsmJSActivation *activation = rt->asmJSActivationStack();
     if (!activation)
         return false;
 
@@ -931,12 +947,12 @@ RedirectJitCodeToInterruptCheck(JSRuntime *rt, CONTEXT *context)
 {
     RedirectIonBackedgesToInterruptCheck(rt);
 
-    if (AsmJSActivation *activation = rt->mainThread.asmJSActivationStack()) {
+    if (AsmJSActivation *activation = rt->asmJSActivationStack()) {
         const AsmJSModule &module = activation->module();
 
 #if defined(JS_ARM_SIMULATOR) || defined(JS_MIPS_SIMULATOR)
-        if (module.containsFunctionPC((void*)rt->mainThread.simulator()->get_pc()))
-            rt->mainThread.simulator()->set_resume_pc(int32_t(module.interruptExit()));
+        if (module.containsFunctionPC((void*)rt->simulator()->get_pc()))
+            rt->simulator()->set_resume_pc(int32_t(module.interruptExit()));
 #endif
 
         uint8_t **ppc = ContextToPC(context);

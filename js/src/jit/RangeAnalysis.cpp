@@ -14,7 +14,7 @@
 #include "jit/MIR.h"
 #include "jit/MIRGenerator.h"
 #include "jit/MIRGraph.h"
-#include "vm/NumericConversions.h"
+#include "js/Conversions.h"
 #include "vm/TypedArrayCommon.h"
 
 #include "jsopcodeinlines.h"
@@ -35,6 +35,7 @@ using mozilla::NegativeInfinity;
 using mozilla::PositiveInfinity;
 using mozilla::Swap;
 using JS::GenericNaN;
+using JS::ToInt32;
 
 // This algorithm is based on the paper "Eliminating Range Checks Using
 // Static Single Assignment Form" by Gough and Klaren.
@@ -2728,10 +2729,10 @@ CloneForDeadBranches(TempAllocator &alloc, MInstruction *candidate)
 
     MDefinitionVector operands(alloc);
     size_t end = candidate->numOperands();
-    for (size_t i = 0; i < end; i++) {
-        if (!operands.append(candidate->getOperand(i)))
-            return false;
-    }
+    if (!operands.reserve(end))
+        return false;
+    for (size_t i = 0; i < end; ++i)
+        operands.infallibleAppend(candidate->getOperand(i));
 
     MInstruction *clone = candidate->clone(alloc, operands);
     clone->setRange(nullptr);

@@ -9,7 +9,6 @@
 var { Ci, Cu, Cc, components } = require("chrome");
 var Services = require("Services");
 var promise = require("promise");
-var { setTimeout } = require("Timer");
 
 /**
  * Turn the error |aError| into a string, without fail.
@@ -121,7 +120,7 @@ exports.zip = function zip(a, b) {
  */
 exports.executeSoon = function executeSoon(aFn) {
   if (isWorker) {
-    setTimeout(aFn, 0);
+    require("Timer").setTimeout(aFn, 0);
   } else {
     Services.tm.mainThread.dispatch({
       run: exports.makeInfallible(aFn)
@@ -151,7 +150,7 @@ exports.waitForTick = function waitForTick() {
  */
 exports.waitForTime = function waitForTime(aDelay) {
   let deferred = promise.defer();
-  setTimeout(deferred.resolve, aDelay);
+  require("Timer").setTimeout(deferred.resolve, aDelay);
   return deferred.promise;
 };
 
@@ -464,20 +463,27 @@ exports.fetch = function fetch(aURL, aOptions={ loadFromCache: true }) {
     case "chrome":
     case "resource":
       try {
-        NetUtil.asyncFetch(url, function onFetch(aStream, aStatus, aRequest) {
-          if (!components.isSuccessCode(aStatus)) {
-            deferred.reject(new Error("Request failed with status code = "
-                                      + aStatus
-                                      + " after NetUtil.asyncFetch for url = "
-                                      + url));
-            return;
-          }
+        NetUtil.asyncFetch2(
+          url,
+          function onFetch(aStream, aStatus, aRequest) {
+            if (!components.isSuccessCode(aStatus)) {
+              deferred.reject(new Error("Request failed with status code = "
+                                        + aStatus
+                                        + " after NetUtil.asyncFetch2 for url = "
+                                        + url));
+              return;
+            }
 
-          let source = NetUtil.readInputStreamToString(aStream, aStream.available());
-          contentType = aRequest.contentType;
-          deferred.resolve(source);
-          aStream.close();
-        });
+            let source = NetUtil.readInputStreamToString(aStream, aStream.available());
+            contentType = aRequest.contentType;
+            deferred.resolve(source);
+            aStream.close();
+          },
+          null,      // aLoadingNode
+          Services.scriptSecurityManager.getSystemPrincipal(),
+          null,      // aTriggeringPrincipal
+          Ci.nsILoadInfo.SEC_NORMAL,
+          Ci.nsIContentPolicy.TYPE_OTHER);
       } catch (ex) {
         deferred.reject(ex);
       }

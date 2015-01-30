@@ -693,6 +693,7 @@ protected:
      */
     void MaybeInitTiming();
 
+public:
     // Event type dispatched by RestorePresentation
     class RestorePresentationEvent : public nsRunnable {
     public:
@@ -702,6 +703,7 @@ protected:
     private:
         nsRefPtr<nsDocShell> mDocShell;
     };
+protected:
 
     bool JustStartedNetworkLoad();
 
@@ -877,6 +879,7 @@ protected:
     bool                       mAllowKeywordFixup;
     bool                       mIsOffScreenBrowser;
     bool                       mIsActive;
+    bool                       mIsPrerendered;
     bool                       mIsAppTab;
     bool                       mUseGlobalHistory;
     bool                       mInPrivateBrowsing;
@@ -928,6 +931,11 @@ protected:
 
     nsRefPtr<nsDOMNavigationTiming> mTiming;
 
+    // This flag means that mTiming has been initialized but nulled out.
+    // We will check the innerWin's timing before creating a new one
+    // in MaybeInitTiming()
+    bool                            mBlankTiming;
+
     // Are we a regular frame, a browser frame, or an app frame?
     FrameType mFrameType;
 
@@ -941,6 +949,9 @@ protected:
     // find it by walking up the docshell hierarchy.)
     uint32_t mOwnOrContainingAppId;
 
+    nsString mPaymentRequestId;
+
+    nsString GetInheritedPaymentRequestId();
 private:
     nsCString         mForcedCharset;
     nsCString         mParentCharset;

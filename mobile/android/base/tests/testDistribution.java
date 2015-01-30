@@ -1,3 +1,7 @@
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
+
 package org.mozilla.gecko.tests;
 
 import java.io.File;
@@ -17,9 +21,9 @@ import org.json.JSONObject;
 import org.mozilla.gecko.Actions;
 import org.mozilla.gecko.AppConstants;
 import org.mozilla.gecko.BrowserLocaleManager;
+import org.mozilla.gecko.GeckoProfile;
 import org.mozilla.gecko.GeckoSharedPrefs;
 import org.mozilla.gecko.db.BrowserContract;
-import org.mozilla.gecko.db.BrowserDB;
 import org.mozilla.gecko.db.SuggestedSites;
 import org.mozilla.gecko.distribution.Distribution;
 import org.mozilla.gecko.distribution.ReferrerDescriptor;
@@ -131,7 +135,7 @@ public class testDistribution extends ContentProviderTest {
         clearDistributionPref();
         Distribution dist = initDistribution(mockPackagePath);
         SuggestedSites suggestedSites = new SuggestedSites(mActivity, dist);
-        BrowserDB.setSuggestedSites(suggestedSites);
+        GeckoProfile.get(mActivity).getDB().setSuggestedSites(suggestedSites);
 
         // Test tiles uploading for an en-US OS locale with no app locale.
         setOSLocale(Locale.US);
@@ -169,7 +173,22 @@ public class testDistribution extends ContentProviderTest {
         BrowserLocaleManager.storeAndNotifyOSLocale(GeckoSharedPrefs.forProfile(mActivity), locale);
     }
 
-    private void doReferrerTest(String ref, final TestableDistribution distribution, final Runnable distributionReady) throws InterruptedException {
+    private abstract class ExpectNoDistributionCallback implements Distribution.ReadyCallback {
+            @Override
+            public void distributionFound(final Distribution distribution) {
+                mAsserter.ok(false, "No distributionFound.", "Wasn't expecting a distribution!");
+                synchronized (distribution) {
+                    distribution.notifyAll();
+                }
+            }
+
+            @Override
+            public void distributionArrivedLate(final Distribution distribution) {
+                mAsserter.ok(false, "No distributionArrivedLate.", "Wasn't expecting a late distribution!");
+            }
+    }
+
+    private void doReferrerTest(String ref, final TestableDistribution distribution, final Distribution.ReadyCallback distributionReady) throws InterruptedException {
         final Intent intent = new Intent(ACTION_INSTALL_REFERRER);
         intent.setClassName(AppConstants.ANDROID_PACKAGE_NAME, CLASS_REFERRER_RECEIVER);
         intent.putExtra("referrer", ref);
@@ -211,10 +230,10 @@ public class testDistribution extends ContentProviderTest {
         //              --es "referrer" "utm_source=mozilla&utm_medium=testmedium&utm_term=testterm&utm_content=testcontent&utm_campaign=distribution"
         final String ref = "utm_source=mozilla&utm_medium=testmedium&utm_term=testterm&utm_content=testcontent&utm_campaign=distribution";
         final TestableDistribution distribution = new TestableDistribution(mActivity);
-        final Runnable distributionReady = new Runnable() {
+        final Distribution.ReadyCallback distributionReady = new ExpectNoDistributionCallback() {
             @Override
-            public void run() {
-                Log.i(LOGTAG, "Test told distribution is ready.");
+            public void distributionNotFound() {
+                Log.i(LOGTAG, "Test told distribution processing is done.");
                 mAsserter.ok(!distribution.exists(), "Not processed.", "No download because we're offline.");
                 ReferrerDescriptor referrerValue = TestableDistribution.getReferrerDescriptorForTesting();
                 mAsserter.dumpLog("Referrer was " + referrerValue);
@@ -242,9 +261,9 @@ public class testDistribution extends ContentProviderTest {
         //              --es "referrer" "utm_source=mozilla&utm_medium=testmedium&utm_term=testterm&utm_content=testcontent&utm_campaign=testname"
         final String ref = "utm_source=mozilla&utm_medium=testmedium&utm_term=testterm&utm_content=testcontent&utm_campaign=testname";
         final TestableDistribution distribution = new TestableDistribution(mActivity);
-        final Runnable distributionReady = new Runnable() {
+        final Distribution.ReadyCallback distributionReady = new ExpectNoDistributionCallback() {
             @Override
-            public void run() {
+            public void distributionNotFound() {
                 mAsserter.ok(!distribution.exists(), "Not processed.", "No download because campaign was wrong.");
                 ReferrerDescriptor referrerValue = TestableDistribution.getReferrerDescriptorForTesting();
                 mAsserter.is(referrerValue, null, "No referrer.");

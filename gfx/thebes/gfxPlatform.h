@@ -604,10 +604,7 @@ protected:
     /**
      * Initialized hardware vsync based on each platform.
      */
-    virtual already_AddRefed<mozilla::gfx::VsyncSource> CreateHardwareVsyncSource() {
-      NS_WARNING("Hardware vsync not supported on platform yet");
-      return nullptr;
-    }
+    virtual already_AddRefed<mozilla::gfx::VsyncSource> CreateHardwareVsyncSource();
 
     /**
      * Helper method, creates a draw target for a specific Azure backend.
@@ -676,6 +673,8 @@ protected:
     // Hardware vsync source. Only valid on parent process
     nsRefPtr<mozilla::gfx::VsyncSource> mVsyncSource;
 
+    mozilla::RefPtr<mozilla::gfx::DrawTarget> mScreenReferenceDrawTarget;
+
 private:
     /**
      * Start up Thebes.
@@ -691,7 +690,6 @@ private:
     virtual void GetPlatformCMSOutputProfile(void *&mem, size_t &size);
 
     nsRefPtr<gfxASurface> mScreenReferenceSurface;
-    mozilla::RefPtr<mozilla::gfx::DrawTarget> mScreenReferenceDrawTarget;
     nsTArray<uint32_t> mCJKPrefLangs;
     nsCOMPtr<nsIObserver> mSRGBOverrideObserver;
     nsCOMPtr<nsIObserver> mFontPrefsObserver;

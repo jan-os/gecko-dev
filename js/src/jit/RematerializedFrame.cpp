@@ -8,6 +8,7 @@
 
 #include "jit/JitFrames.h"
 #include "vm/ArgumentsObject.h"
+#include "vm/Debugger.h"
 
 #include "jsscriptinlines.h"
 #include "jit/JitFrames-inl.h"
@@ -29,7 +30,7 @@ struct CopyValueToRematerializedFrame
 };
 
 RematerializedFrame::RematerializedFrame(JSContext *cx, uint8_t *top, unsigned numActualArgs,
-                                         InlineFrameIterator &iter)
+                                         InlineFrameIterator &iter, MaybeReadFallback &fallback)
   : prevUpToDate_(false),
     isDebuggee_(iter.script()->isDebuggee()),
     top_(top),
@@ -39,14 +40,14 @@ RematerializedFrame::RematerializedFrame(JSContext *cx, uint8_t *top, unsigned n
     script_(iter.script())
 {
     CopyValueToRematerializedFrame op(slots_);
-    MaybeReadFallback fallback(MagicValue(JS_OPTIMIZED_OUT));
     iter.readFrameArgsAndLocals(cx, op, op, &scopeChain_, &hasCallObj_, &returnValue_,
                                 &argsObj_, &thisValue_, ReadFrame_Actuals,
                                 fallback);
 }
 
 /* static */ RematerializedFrame *
-RematerializedFrame::New(JSContext *cx, uint8_t *top, InlineFrameIterator &iter)
+RematerializedFrame::New(JSContext *cx, uint8_t *top, InlineFrameIterator &iter,
+                         MaybeReadFallback &fallback)
 {
     unsigned numFormals = iter.isFunctionFrame() ? iter.calleeTemplate()->nargs() : 0;
     unsigned argSlots = Max(numFormals, iter.numActualArgs());
@@ -58,12 +59,13 @@ RematerializedFrame::New(JSContext *cx, uint8_t *top, InlineFrameIterator &iter)
     if (!buf)
         return nullptr;
 
-    return new (buf) RematerializedFrame(cx, top, iter.numActualArgs(), iter);
+    return new (buf) RematerializedFrame(cx, top, iter.numActualArgs(), iter, fallback);
 }
 
 /* static */ bool
 RematerializedFrame::RematerializeInlineFrames(JSContext *cx, uint8_t *top,
                                                InlineFrameIterator &iter,
+                                               MaybeReadFallback &fallback,
                                                Vector<RematerializedFrame *> &frames)
 {
     if (!frames.resize(iter.frameCount()))
@@ -71,14 +73,10 @@ RematerializedFrame::RematerializeInlineFrames(JSContext *cx, uint8_t *top,
 
     while (true) {
         size_t frameNo = iter.frameNo();
-        RematerializedFrame *frame = RematerializedFrame::New(cx, top, iter);
+        RematerializedFrame *frame = RematerializedFrame::New(cx, top, iter, fallback);
         if (!frame)
             return false;
         if (frame->scopeChain()) {
-            // Frames are often rematerialized with the cx inside a Debugger's
-            // compartment. To create CallObjects, we need to be in that
-            // frame's compartment.
-            AutoCompartment ac(cx, frame->scopeChain());
             if (!EnsureHasScopeObjects(cx, frame))
                 return false;
         }
@@ -98,6 +96,7 @@ RematerializedFrame::FreeInVector(Vector<RematerializedFrame *> &frames)
 {
     for (size_t i = 0; i < frames.length(); i++) {
         RematerializedFrame *f = frames[i];
+        Debugger::assertNotInFrameMaps(f);
         f->RematerializedFrame::~RematerializedFrame();
         js_free(f);
     }

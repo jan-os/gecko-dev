@@ -43,6 +43,7 @@ DIRS += [
     'base',
     'activities',
     'archivereader',
+    'requestsync',
     'bindings',
     'battery',
     'browser-element',
@@ -93,6 +94,7 @@ DIRS += [
     'workers',
     'camera',
     'audiochannel',
+    'broadcastchannel',
     'promise',
     'smil',
     'telephony',
@@ -145,6 +147,8 @@ if CONFIG['MOZ_B2G_BT_API_V2']:
     DIRS += ['bluetooth2']
 else:
     DIRS += ['bluetooth']
+
+DIRS += ['presentation']
 
 TEST_DIRS += [
     'tests',

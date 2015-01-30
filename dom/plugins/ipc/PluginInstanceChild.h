@@ -89,7 +89,7 @@ protected:
     AnswerNPP_HandleEvent(const NPRemoteEvent& event, int16_t* handled) MOZ_OVERRIDE;
     virtual bool
     AnswerNPP_HandleEvent_Shmem(const NPRemoteEvent& event,
-                                Shmem& mem,
+                                Shmem&& mem,
                                 int16_t* handled,
                                 Shmem* rtnmem) MOZ_OVERRIDE;
     virtual bool
@@ -144,9 +144,9 @@ protected:
     RecvPPluginScriptableObjectConstructor(PPluginScriptableObjectChild* aActor) MOZ_OVERRIDE;
 
     virtual bool
-    RecvPBrowserStreamConstructor(PBrowserStreamChild* aActor, const nsCString& url,
-                                  const uint32_t& length, const uint32_t& lastmodified,
-                                  PStreamNotifyChild* notifyData, const nsCString& headers);
+    RecvPBrowserStreamConstructor(PBrowserStreamChild* aActor, const nsCString& aURL,
+                                  const uint32_t& aLength, const uint32_t& aLastmodified,
+                                  PStreamNotifyChild* aNotifyData, const nsCString& aHeaders) MOZ_OVERRIDE;
 
     virtual bool
     AnswerNPP_NewStream(
@@ -545,7 +545,7 @@ private:
 
     void Destroy();
 
-    void ActorDestroy(ActorDestroyReason why);
+    void ActorDestroy(ActorDestroyReason aWhy) MOZ_OVERRIDE;
 
     // Set as true when SetupLayer called
     // and go with different path in InvalidateRect function

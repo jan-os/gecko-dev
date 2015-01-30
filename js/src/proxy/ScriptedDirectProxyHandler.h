@@ -64,12 +64,19 @@ class ScriptedDirectProxyHandler : public DirectProxyHandler {
         return BaseProxyHandler::getOwnEnumerablePropertyKeys(cx, proxy, props);
     }
 
+    // A scripted proxy should not be treated as generic in most contexts.
+    virtual bool nativeCall(JSContext *cx, IsAcceptableThis test, NativeImpl impl,
+                            CallArgs args) const MOZ_OVERRIDE;
+    virtual bool objectClassIs(HandleObject obj, ESClassValue classValue,
+                               JSContext *cx) const MOZ_OVERRIDE;
+    virtual bool regexp_toShared(JSContext *cx, HandleObject proxy,
+                                 RegExpGuard *g) const MOZ_OVERRIDE;
+    virtual bool boxedValue_unbox(JSContext *cx, HandleObject proxy,
+                                  MutableHandleValue vp) const MOZ_OVERRIDE;
+
     virtual bool isCallable(JSObject *obj) const MOZ_OVERRIDE;
-    virtual bool isConstructor(JSObject *obj) const MOZ_OVERRIDE {
-        // For now we maintain the broken behavior that a scripted proxy is constructable if it's
-        // callable. See bug 929467.
-        return isCallable(obj);
-    }
+    virtual bool isConstructor(JSObject *obj) const MOZ_OVERRIDE;
+
     virtual bool isScripted() const MOZ_OVERRIDE { return true; }
 
     static const char family;
@@ -78,7 +85,10 @@ class ScriptedDirectProxyHandler : public DirectProxyHandler {
     // The "proxy extra" slot index in which the handler is stored. Revocable proxies need to set
     // this at revocation time.
     static const int HANDLER_EXTRA = 0;
-    static const int IS_CALLABLE_EXTRA = 1;
+    static const int IS_CALLCONSTRUCT_EXTRA = 1;
+    // Bitmasks for the "call/construct" slot
+    static const int IS_CALLABLE    = 1 << 0;
+    static const int IS_CONSTRUCTOR = 1 << 1;
     // The "function extended" slot index in which the revocation object is stored. Per spec, this
     // is to be cleared during the first revocation.
     static const int REVOKE_SLOT = 0;

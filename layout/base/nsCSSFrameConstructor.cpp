@@ -5789,6 +5789,9 @@ nsCSSFrameConstructor::AddFrameConstructionItemsInternal(nsFrameConstructorState
 static void
 AddGenConPseudoToFrame(nsIFrame* aOwnerFrame, nsIContent* aContent)
 {
+  NS_ASSERTION(nsLayoutUtils::IsFirstContinuationOrIBSplitSibling(aOwnerFrame),
+               "property should only be set on first continuation/ib-sibling");
+
   typedef nsAutoTArray<nsIContent*, 2> T;
   const FramePropertyDescriptor* prop = nsIFrame::GenConProperty();
   FrameProperties props = aOwnerFrame->Properties();
@@ -9293,9 +9296,9 @@ nsCSSFrameConstructor::RecreateFramesForContent(nsIContent*  aContent,
       // nsIAnonymousContentCreator that created this content knows how to make
       // that happen.
       nsIAnonymousContentCreator* acc = nullptr;
-      nsIFrame* ancestor = frame->GetParent();
+      nsIFrame* ancestor = nsLayoutUtils::GetParentOrPlaceholderFor(frame);
       while (!(acc = do_QueryFrame(ancestor))) {
-        ancestor = ancestor->GetParent();
+        ancestor = nsLayoutUtils::GetParentOrPlaceholderFor(ancestor);
       }
       NS_ASSERTION(acc, "Where is the nsIAnonymousContentCreator? We may fail "
                         "to recreate its content correctly");

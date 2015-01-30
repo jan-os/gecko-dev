@@ -187,7 +187,7 @@ MacroAssemblerX86::finish()
 
     // SIMD memory values must be suitably aligned.
     if (!simds_.empty())
-        masm.align(SimdStackAlignment);
+        masm.align(SimdMemoryAlignment);
     for (size_t i = 0; i < simds_.length(); i++) {
         CodeLabel cl(simds_[i].uses);
         SimdData &v = simds_[i];
@@ -421,6 +421,18 @@ MacroAssemblerX86::handleFailureWithHandlerTail(void *handler)
     loadValue(Address(ebp, BaselineFrame::reverseOffsetOfReturnValue()), JSReturnOperand);
     movl(ebp, esp);
     pop(ebp);
+
+    // If profiling is enabled, then update the lastProfilingFrame to refer to caller
+    // frame before returning.
+    {
+        Label skipProfilingInstrumentation;
+        // Test if profiler enabled.
+        AbsoluteAddress addressOfEnabled(GetJitContext()->runtime->spsProfiler().addressOfEnabled());
+        branch32(Assembler::Equal, addressOfEnabled, Imm32(0), &skipProfilingInstrumentation);
+        profilerExitFrame();
+        bind(&skipProfilingInstrumentation);
+    }
+
     ret();
 
     // If we are bailing out to baseline to handle an exception, jump to
@@ -513,4 +525,19 @@ MacroAssemblerX86::branchValueIsNurseryObject(Condition cond, ValueOperand value
     branchPtrInNurseryRange(cond, value.payloadReg(), temp, label);
 
     bind(&done);
+}
+
+void
+MacroAssemblerX86::profilerEnterFrame(Register framePtr, Register scratch)
+{
+    AbsoluteAddress activation(GetJitContext()->runtime->addressOfProfilingActivation());
+    loadPtr(activation, scratch);
+    storePtr(framePtr, Address(scratch, JitActivation::offsetOfLastProfilingFrame()));
+    storePtr(ImmPtr(nullptr), Address(scratch, JitActivation::offsetOfLastProfilingCallSite()));
+}
+
+void
+MacroAssemblerX86::profilerExitFrame()
+{
+    jmp(GetJitContext()->runtime->jitRuntime()->getProfilerExitFrameTail());
 }

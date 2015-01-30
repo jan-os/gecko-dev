@@ -22,16 +22,14 @@ static const char* kReadNDEFRequest = "readNDEF";
 static const char* kWriteNDEFRequest = "writeNDEF";
 static const char* kMakeReadOnlyRequest = "makeReadOnly";
 static const char* kFormatRequest = "format";
-static const char* kConnectRequest = "connect";
-static const char* kCloseRequest = "close";
+static const char* kTransceiveRequest = "transceive";
 
 static const char* kChangeRFStateResponse = "ChangeRFStateResponse";
 static const char* kReadNDEFResponse = "ReadNDEFResponse";
 static const char* kWriteNDEFResponse = "WriteNDEFResponse";
 static const char* kMakeReadOnlyResponse = "MakeReadOnlyResponse";
 static const char* kFormatResponse = "FormatResponse";
-static const char* kConnectResponse = "ConnectResponse";
-static const char* kCloseResponse = "CloseResponse";
+static const char* kTransceiveResponse = "TransceiveResponse";
 
 static const char* kInitializedNotification = "InitializedNotification";
 static const char* kTechDiscoveredNotification = "TechDiscoveredNotification";
@@ -58,12 +56,9 @@ NfcMessageHandler::Marshall(Parcel& aParcel, const CommandOptions& aOptions)
   } else if (!strcmp(type, kFormatRequest)) {
     result = FormatRequest(aParcel, aOptions);
     mPendingReqQueue.AppendElement(NfcRequest::FormatReq);
-  } else if (!strcmp(type, kConnectRequest)) {
-    result = ConnectRequest(aParcel, aOptions);
-    mPendingReqQueue.AppendElement(NfcRequest::ConnectReq);
-  } else if (!strcmp(type, kCloseRequest)) {
-    result = CloseRequest(aParcel, aOptions);
-    mPendingReqQueue.AppendElement(NfcRequest::CloseReq);
+  } else if (!strcmp(type, kTransceiveRequest)) {
+    result = TransceiveRequest(aParcel, aOptions);
+    mPendingReqQueue.AppendElement(NfcRequest::TransceiveReq);
   } else {
     result = false;
   }
@@ -87,6 +82,9 @@ NfcMessageHandler::Unmarshall(const Parcel& aParcel, EventOptions& aOptions)
       break;
     case NfcResponse::ReadNDEFRsp:
       result = ReadNDEFResponse(aParcel, aOptions);
+      break;
+    case NfcResponse::TransceiveRsp:
+      result = TransceiveResponse(aParcel, aOptions);
       break;
     case NfcNotification::Initialized:
       result = InitializeNotification(aParcel, aOptions);
@@ -125,12 +123,6 @@ NfcMessageHandler::GeneralResponse(const Parcel& aParcel, EventOptions& aOptions
       break;
     case NfcRequest::FormatReq:
       type = kFormatResponse;
-      break;
-    case NfcRequest::ConnectReq:
-      type = kConnectResponse;
-      break;
-    case NfcRequest::CloseReq:
-      type = kCloseResponse;
       break;
     default:
       NMH_LOG("Nfcd, unknown general response %d", pendingReq);
@@ -197,6 +189,24 @@ NfcMessageHandler::ReadNDEFResponse(const Parcel& aParcel, EventOptions& aOption
 }
 
 bool
+NfcMessageHandler::TransceiveResponse(const Parcel& aParcel, EventOptions& aOptions)
+{
+  aOptions.mType = NS_ConvertUTF8toUTF16(kTransceiveResponse);
+  aOptions.mErrorCode = aParcel.readInt32();
+  aOptions.mSessionId = aParcel.readInt32();
+
+  NS_ENSURE_TRUE(!mRequestIdQueue.IsEmpty(), false);
+  aOptions.mRequestId = mRequestIdQueue[0];
+  mRequestIdQueue.RemoveElementAt(0);
+
+  if (aOptions.mErrorCode == NfcErrorCode::Success) {
+    ReadTransceiveResponse(aParcel, aOptions);
+  }
+
+  return true;
+}
+
+bool
 NfcMessageHandler::WriteNDEFRequest(Parcel& aParcel, const CommandOptions& aOptions)
 {
   aParcel.writeInt32(NfcRequest::WriteNDEFReq);
@@ -226,20 +236,18 @@ NfcMessageHandler::FormatRequest(Parcel& aParcel, const CommandOptions& aOptions
 }
 
 bool
-NfcMessageHandler::ConnectRequest(Parcel& aParcel, const CommandOptions& aOptions)
+NfcMessageHandler::TransceiveRequest(Parcel& aParcel, const CommandOptions& aOptions)
 {
-  aParcel.writeInt32(NfcRequest::ConnectReq);
+  aParcel.writeInt32(NfcRequest::TransceiveReq);
   aParcel.writeInt32(aOptions.mSessionId);
-  aParcel.writeInt32(aOptions.mTechType);
-  mRequestIdQueue.AppendElement(aOptions.mRequestId);
-  return true;
-}
+  aParcel.writeInt32(aOptions.mTechnology);
 
-bool
-NfcMessageHandler::CloseRequest(Parcel& aParcel, const CommandOptions& aOptions)
-{
-  aParcel.writeInt32(NfcRequest::CloseReq);
-  aParcel.writeInt32(aOptions.mSessionId);
+  uint32_t length = aOptions.mCommand.Length();
+  aParcel.writeInt32(length);
+
+  void* data = aParcel.writeInplace(length);
+  memcpy(data, aOptions.mCommand.Elements(), length);
+
   mRequestIdQueue.AppendElement(aOptions.mRequestId);
   return true;
 }
@@ -371,6 +379,17 @@ NfcMessageHandler::WriteNDEFMessage(Parcel& aParcel, const CommandOptions& aOpti
     data = aParcel.writeInplace(record.mPayload.Length());
     memcpy(data, record.mPayload.Elements(), record.mPayload.Length());
   }
+
+  return true;
+}
+
+bool
+NfcMessageHandler::ReadTransceiveResponse(const Parcel& aParcel, EventOptions& aOptions)
+{
+  uint32_t length = aParcel.readInt32();
+
+  aOptions.mResponse.AppendElements(
+    static_cast<const uint8_t*>(aParcel.readInplace(length)), length);
 
   return true;
 }

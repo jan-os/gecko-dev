@@ -6,10 +6,14 @@
   <script type="text/javascript"
           src="chrome://mochikit/content/tests/SimpleTest/EventUtils.js"></script>
   <script type="text/javascript" src="chrome://mochikit/content/tests/SimpleTest/ChromeUtils.js"></script>
+  <script type="text/javascript" src="utils.js"></script>
   <link rel="stylesheet" type="text/css"
           href="chrome://mochikit/content/tests/SimpleTest/test.css" />
 </head>
 <body onload="setTimeout(runTests, 0);" style="ime-mode: disabled;">
+<script>
+setTestPluginEnabledState(SpecialPowers.Ci.nsIPluginTag.STATE_ENABLED);
+</script>
 <div id="display" style="ime-mode: disabled;">
   <!-- input elements -->
   <input type="text"     id="text"/><br/>
@@ -1232,16 +1236,13 @@ function runEditorFlagChangeTests()
     editor.QueryInterface(Components.interfaces.nsIEditorIMESupport);
   var flags = editor.flags;
 
-  // start composition
-  synthesizeComposition({ type: "compositionstart" });
-
   // input characters
   synthesizeCompositionChange(
     { "composition":
       { "string": "\u3078\u3093\u3057\u3093",
         "clauses":
         [
-          { "length": 4, "attr": COMPOSITION_ATTR_RAWINPUT }
+          { "length": 4, "attr": COMPOSITION_ATTR_RAW_CLAUSE }
         ]
       },
       "caret": { "start": 4, "length": 0 }

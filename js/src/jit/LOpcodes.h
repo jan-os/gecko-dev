@@ -17,6 +17,8 @@
     _(Pointer)                      \
     _(Double)                       \
     _(Float32)                      \
+    _(SimdBox)                      \
+    _(SimdUnbox)                    \
     _(SimdSplatX4)                  \
     _(Int32x4)                      \
     _(Float32x4)                    \
@@ -55,9 +57,6 @@
     _(NewCallObject)                \
     _(NewSingletonCallObject)       \
     _(NewStringObject)              \
-    _(NewPar)                       \
-    _(NewDenseArrayPar)             \
-    _(NewCallObjectPar)             \
     _(NewDerivedTypedObject)        \
     _(InitElem)                     \
     _(InitElemGetterSetter)         \
@@ -65,7 +64,6 @@
     _(InitProp)                     \
     _(InitPropGetterSetter)         \
     _(CheckOverRecursed)            \
-    _(CheckOverRecursedPar)         \
     _(DefVar)                       \
     _(DefFun)                       \
     _(CallKnown)                    \
@@ -156,7 +154,6 @@
     _(ModD)                         \
     _(BinaryV)                      \
     _(Concat)                       \
-    _(ConcatPar)                    \
     _(CharCodeAt)                   \
     _(FromCharCode)                 \
     _(StringSplit)                  \
@@ -193,7 +190,6 @@
     _(Lambda)                       \
     _(LambdaArrow)                  \
     _(LambdaForSingleton)           \
-    _(LambdaPar)                    \
     _(Slots)                        \
     _(Elements)                     \
     _(ConvertElementsToDoubles)     \
@@ -208,7 +204,6 @@
     _(GuardObjectType)              \
     _(GuardObjectIdentity)          \
     _(GuardClass)                   \
-    _(GuardThreadExclusive)         \
     _(TypeBarrierV)                 \
     _(TypeBarrierO)                 \
     _(MonitorTypes)                 \
@@ -252,8 +247,6 @@
     _(StoreFixedSlotV)              \
     _(StoreFixedSlotT)              \
     _(FunctionEnvironment)          \
-    _(ForkJoinContext)              \
-    _(ForkJoinGetSlice)             \
     _(GetPropertyCacheV)            \
     _(GetPropertyCacheT)            \
     _(GetPropertyPolymorphicV)      \
@@ -297,7 +290,6 @@
     _(SetFrameArgumentV)            \
     _(RunOncePrologue)              \
     _(Rest)                         \
-    _(RestPar)                      \
     _(TypeOfV)                      \
     _(ToIdV)                        \
     _(Floor)                        \
@@ -314,7 +306,6 @@
     _(InterruptCheck)               \
     _(AsmJSInterruptCheck)          \
     _(InterruptCheckImplicit)       \
-    _(ProfilerStackOp)              \
     _(GetDOMProperty)               \
     _(GetDOMMemberV)                \
     _(GetDOMMemberT)                \
@@ -336,7 +327,6 @@
     _(AsmJSCall)                    \
     _(AsmJSCompareExchangeHeap)     \
     _(AsmJSAtomicBinopHeap)         \
-    _(InterruptCheckPar)            \
     _(RecompileCheck)               \
     _(MemoryBarrier)                \
     _(AssertRangeI)                 \

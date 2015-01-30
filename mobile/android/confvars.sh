@@ -5,7 +5,7 @@
 MOZ_APP_BASENAME=Fennec
 MOZ_APP_VENDOR=Mozilla
 
-MOZ_APP_VERSION=37.0a1
+MOZ_APP_VERSION=38.0a1
 MOZ_APP_UA_NAME=Firefox
 
 MOZ_BRANDING_DIRECTORY=mobile/android/branding/unofficial
@@ -54,6 +54,9 @@ MOZ_PAY=1
 
 # Enable UI for healthreporter
 MOZ_SERVICES_HEALTHREPORT=1
+
+# Enable reading list service integration.
+#MOZ_ANDROID_READING_LIST_SERVICE=1
 
 # Enable runtime locale switching.
 MOZ_LOCALE_SWITCHER=1

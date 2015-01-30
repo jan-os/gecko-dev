@@ -9,8 +9,6 @@
 #include <algorithm>
 #include <stdarg.h>
 
-#include "JavaScriptParent.h"
-
 #include "mozilla/DebugOnly.h"
 #include "mozilla/FloatingPoint.h"
 #include "mozilla/Assertions.h"
@@ -20,6 +18,7 @@
 #include "jsfriendapi.h"
 #include "nsContentUtils.h"
 #include "nsGlobalWindow.h"
+#include "nsIDocShell.h"
 #include "nsIDOMGlobalPropertyInitializer.h"
 #include "nsIPermissionManager.h"
 #include "nsIPrincipal.h"
@@ -43,6 +42,7 @@
 #include "mozilla/dom/HTMLEmbedElementBinding.h"
 #include "mozilla/dom/HTMLAppletElementBinding.h"
 #include "mozilla/dom/Promise.h"
+#include "mozilla/jsipc/CrossProcessObjectWrappers.h"
 #include "WorkerPrivate.h"
 #include "nsDOMClassInfo.h"
 
@@ -193,7 +193,7 @@ ErrorResult::ThrowJSException(JSContext* cx, JS::Handle<JS::Value> exn)
   // Make sure mJSException is initialized _before_ we try to root it.  But
   // don't set it to exn yet, because we don't want to do that until after we
   // root.
-  mJSException = JS::UndefinedValue();
+  mJSException.setUndefined();
   if (!js::AddRawValueRoot(cx, &mJSException, "ErrorResult::mJSException")) {
     // Don't use NS_ERROR_DOM_JS_EXCEPTION, because that indicates we have
     // in fact rooted mJSException.
@@ -234,20 +234,11 @@ ErrorResult::ReportJSExceptionFromJSImplementation(JSContext* aCx)
   nsresult rv =
     UNWRAP_OBJECT(DOMException, &mJSException.toObject(), domException);
   if (NS_SUCCEEDED(rv)) {
-    // We actually have to create a new DOMException object, because the one we
+    // We may have to create a new DOMException object, because the one we
     // have has a stack that includes the chrome code that threw it, and in
     // particular has the wrong file/line/column information.
-    nsString message;
-    domException->GetMessageMoz(message);
-    nsString name;
-    domException->GetName(name);
-    nsRefPtr<dom::DOMException> newException =
-      new dom::DOMException(nsresult(domException->Result()),
-                            NS_ConvertUTF16toUTF8(message),
-                            NS_ConvertUTF16toUTF8(name),
-                            domException->Code());
     JS::Rooted<JS::Value> reflector(aCx);
-    if (!GetOrCreateDOMReflector(aCx, newException, &reflector)) {
+    if (!domException->Sanitize(aCx, &reflector)) {
       // Well, that threw _an_ exception.  Let's forget ours.  We can just
       // unroot and not change the value, since mJSException is completely
       // ignored if mResult is not NS_ERROR_DOM_JS_EXCEPTION and we plan to
@@ -301,6 +292,17 @@ ErrorResult::StealJSException(JSContext* cx,
   value.set(mJSException);
   js::RemoveRawValueRoot(cx, &mJSException);
   mResult = NS_OK;
+
+  if (value.isObject()) {
+    // If it's a DOMException we may need to sanitize it.
+    dom::DOMException* domException;
+    nsresult rv =
+      UNWRAP_OBJECT(DOMException, &value.toObject(), domException);
+    if (NS_SUCCEEDED(rv) && !domException->Sanitize(cx, value)) {
+      JS_GetPendingException(cx, value);
+      JS_ClearPendingException(cx);
+    }
+  }
 }
 
 void
@@ -1613,7 +1615,7 @@ NativePropertyHooks sWorkerNativePropertyHooks = {
 bool
 GetPropertyOnPrototype(JSContext* cx, JS::Handle<JSObject*> proxy,
                        JS::Handle<jsid> id, bool* found,
-                       JS::Value* vp)
+                       JS::MutableHandle<JS::Value> vp)
 {
   JS::Rooted<JSObject*> proto(cx);
   if (!js::GetObjectProto(cx, proxy, &proto)) {
@@ -1624,33 +1626,31 @@ GetPropertyOnPrototype(JSContext* cx, JS::Handle<JSObject*> proxy,
     return true;
   }
 
-  bool hasProp;
-  if (!JS_HasPropertyById(cx, proto, id, &hasProp)) {
+  if (!JS_HasPropertyById(cx, proto, id, found)) {
     return false;
   }
 
-  *found = hasProp;
-  if (!hasProp || !vp) {
+  if (!*found) {
     return true;
   }
 
-  JS::Rooted<JS::Value> value(cx);
-  if (!JS_ForwardGetPropertyTo(cx, proto, id, proxy, &value)) {
-    return false;
-  }
-
-  *vp = value;
-  return true;
+  return JS_ForwardGetPropertyTo(cx, proto, id, proxy, vp);
 }
 
 bool
 HasPropertyOnPrototype(JSContext* cx, JS::Handle<JSObject*> proxy,
-                       JS::Handle<jsid> id)
+                       JS::Handle<jsid> id, bool* has)
 {
-  bool found;
-  // We ignore an error from GetPropertyOnPrototype.  We pass nullptr
-  // for vp so that GetPropertyOnPrototype won't actually do a get.
-  return !GetPropertyOnPrototype(cx, proxy, id, &found, nullptr) || found;
+  JS::Rooted<JSObject*> proto(cx);
+  if (!js::GetObjectProto(cx, proxy, &proto)) {
+    return false;
+  }
+  if (!proto) {
+    *has = false;
+    return true;
+  }
+
+  return JS_HasPropertyById(cx, proto, id, has);
 }
 
 bool
@@ -1670,7 +1670,16 @@ AppendNamedPropertyIds(JSContext* cx, JS::Handle<JSObject*> proxy,
       return false;
     }
 
-    if (shadowPrototypeProperties || !HasPropertyOnPrototype(cx, proxy, id)) {
+    bool shouldAppend = shadowPrototypeProperties;
+    if (!shouldAppend) {
+      bool has;
+      if (!HasPropertyOnPrototype(cx, proxy, id, &has)) {
+        return false;
+      }
+      shouldAppend = !has;
+    }
+
+    if (shouldAppend) {
       if (!props.append(id)) {
         return false;
       }
@@ -2061,8 +2070,8 @@ ReportLenientThisUnwrappingFailure(JSContext* cx, JSObject* obj)
 }
 
 bool
-GetWindowForJSImplementedObject(JSContext* cx, JS::Handle<JSObject*> obj,
-                                nsPIDOMWindow** window)
+GetContentGlobalForJSImplementedObject(JSContext* cx, JS::Handle<JSObject*> obj,
+                                       nsIGlobalObject** globalObj)
 {
   // Be very careful to not get tricked here.
   MOZ_ASSERT(NS_IsMainThread());
@@ -2088,37 +2097,36 @@ GetWindowForJSImplementedObject(JSContext* cx, JS::Handle<JSObject*> obj,
     return false;
   }
 
-  // It's OK if we have null here: that just means the content-side
-  // object really wasn't associated with any window.
-  nsCOMPtr<nsPIDOMWindow> win(do_QueryInterface(global.GetAsSupports()));
-  win.forget(window);
+  DebugOnly<nsresult> rv = CallQueryInterface(global.GetAsSupports(), globalObj);
+  MOZ_ASSERT(NS_SUCCEEDED(rv));
+  MOZ_ASSERT(*globalObj);
   return true;
 }
 
-already_AddRefed<nsPIDOMWindow>
+already_AddRefed<nsIGlobalObject>
 ConstructJSImplementation(JSContext* aCx, const char* aContractId,
                           const GlobalObject& aGlobal,
                           JS::MutableHandle<JSObject*> aObject,
                           ErrorResult& aRv)
 {
-  // Get the window to use as a parent and for initialization.
-  nsCOMPtr<nsPIDOMWindow> window = do_QueryInterface(aGlobal.GetAsSupports());
-  if (!window) {
+  // Get the global object to use as a parent and for initialization.
+  nsCOMPtr<nsIGlobalObject> global = do_QueryInterface(aGlobal.GetAsSupports());
+  if (!global) {
     aRv.Throw(NS_ERROR_FAILURE);
     return nullptr;
   }
 
-  ConstructJSImplementation(aCx, aContractId, window, aObject, aRv);
+  ConstructJSImplementation(aCx, aContractId, global, aObject, aRv);
 
   if (aRv.Failed()) {
     return nullptr;
   }
-  return window.forget();
+  return global.forget();
 }
 
 void
 ConstructJSImplementation(JSContext* aCx, const char* aContractId,
-                          nsPIDOMWindow* aWindow,
+                          nsIGlobalObject* aGlobal,
                           JS::MutableHandle<JSObject*> aObject,
                           ErrorResult& aRv)
 {
@@ -2138,12 +2146,14 @@ ConstructJSImplementation(JSContext* aCx, const char* aContractId,
       aRv.Throw(rv);
       return;
     }
-    // Initialize the object, if it implements nsIDOMGlobalPropertyInitializer.
+    // Initialize the object, if it implements nsIDOMGlobalPropertyInitializer
+    // and our global is a window.
     nsCOMPtr<nsIDOMGlobalPropertyInitializer> gpi =
       do_QueryInterface(implISupports);
+    nsCOMPtr<nsPIDOMWindow> window = do_QueryInterface(aGlobal);
     if (gpi) {
       JS::Rooted<JS::Value> initReturn(aCx);
-      rv = gpi->Init(aWindow, &initReturn);
+      rv = gpi->Init(window, &initReturn);
       if (NS_FAILED(rv)) {
         aRv.Throw(rv);
         return;
@@ -2371,12 +2381,47 @@ CheckPermissions(JSContext* aCx, JSObject* aObj, const char* const aPermissions[
   return false;
 }
 
-bool
-CheckSafetyInPrerendering(JSContext* aCx, JSObject* aObj)
+void
+HandlePrerenderingViolation(nsPIDOMWindow* aWindow)
 {
-  //TODO: Check if page is being prerendered.
-  //Returning false for now.
-  return false;
+  // Suspend the window and its workers, and its children too.
+  aWindow->SuspendTimeouts();
+
+  // Suspend event handling on the document
+  nsCOMPtr<nsIDocument> doc = aWindow->GetExtantDoc();
+  if (doc) {
+    doc->SuppressEventHandling(nsIDocument::eEvents);
+  }
+}
+
+bool
+EnforceNotInPrerendering(JSContext* aCx, JSObject* aObj)
+{
+  JS::Rooted<JSObject*> thisObj(aCx, js::CheckedUnwrap(aObj));
+  if (!thisObj) {
+    // Without a this object, we cannot check the safety.
+    return true;
+  }
+  nsGlobalWindow* window = xpc::WindowGlobalOrNull(thisObj);
+  if (!window) {
+    // Without a window, we cannot check the safety.
+    return true;
+  }
+
+  nsIDocShell* docShell = window->GetDocShell();
+  if (!docShell) {
+    // Without a docshell, we cannot check the safety.
+    return true;
+  }
+
+  if (docShell->GetIsPrerendered()) {
+    HandlePrerenderingViolation(window);
+    // When the bindings layer sees a false return value, it returns false form
+    // the JSNative in order to trigger an uncatchable exception.
+    return false;
+  }
+
+  return true;
 }
 
 bool

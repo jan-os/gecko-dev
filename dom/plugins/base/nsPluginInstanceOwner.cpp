@@ -662,7 +662,6 @@ NS_IMETHODIMP nsPluginInstanceOwner::GetNetscapeWindow(void *value)
   nsViewManager* vm = mPluginFrame->PresContext()->GetPresShell()->GetViewManager();
   if (!vm)
     return NS_ERROR_FAILURE;
-#if defined(XP_WIN)
   // This property is provided to allow a "windowless" plugin to determine the window it is drawing
   // in, so it can translate mouse coordinates it receives directly from the operating system
   // to coordinates relative to itself.
@@ -681,7 +680,8 @@ NS_IMETHODIMP nsPluginInstanceOwner::GetNetscapeWindow(void *value)
   // we only attempt to get the nearest window if this really is a "windowless" plugin so as not
   // to change any behaviour for the much more common windowed plugins,
   // though why this method would even be being called for a windowed plugin escapes me.
-  if (mPluginWindow && mPluginWindow->type == NPWindowTypeDrawable) {
+  if (XRE_GetProcessType() != GeckoProcessType_Content &&
+      mPluginWindow && mPluginWindow->type == NPWindowTypeDrawable) {
     // it turns out that flash also uses this window for determining focus, and is currently
     // unable to show a caret correctly if we return the enclosing window. Therefore for
     // now we only return the enclosing window when there is an actual offset which
@@ -706,12 +706,11 @@ NS_IMETHODIMP nsPluginInstanceOwner::GetNetscapeWindow(void *value)
       }
     }
   }
-#endif
   // simply return the topmost document window
   nsCOMPtr<nsIWidget> widget;
   vm->GetRootWidget(getter_AddRefs(widget));
   if (widget) {
-    *pvalue = (void*)widget->GetNativeData(NS_NATIVE_WINDOW);
+    *pvalue = (void*)widget->GetNativeData(NS_NATIVE_SHAREABLE_WINDOW);
   } else {
     NS_ASSERTION(widget, "couldn't get doc's widget in getting doc's window handle");
   }
@@ -790,7 +789,6 @@ NPBool nsPluginInstanceOwner::ConvertPointPuppet(PuppetWidget *widget,
   tabContentBounds.ScaleInverseRoundOut(scaleFactor);
   int32_t windowH = tabContentBounds.height + int(chromeSize.y);
 
-  // This is actually relative to window-chrome.
   nsPoint pluginPosition = AsNsPoint(pluginFrame->GetScreenRect().TopLeft());
 
   // Convert (sourceX, sourceY) to 'real' (not PuppetWidget) screen space.
@@ -800,8 +798,8 @@ NPBool nsPluginInstanceOwner::ConvertPointPuppet(PuppetWidget *widget,
   nsPoint screenPoint;
   switch (sourceSpace) {
     case NPCoordinateSpacePlugin:
-      screenPoint = sourcePoint + pluginFrame->GetContentRectRelativeToSelf().TopLeft() +
-        chromeSize + pluginPosition + windowPosition;
+      screenPoint = sourcePoint + pluginPosition +
+        pluginFrame->GetContentRectRelativeToSelf().TopLeft() / nsPresContext::AppUnitsPerCSSPixel();
       break;
     case NPCoordinateSpaceWindow:
       screenPoint = nsPoint(sourcePoint.x, windowH-sourcePoint.y) +
@@ -824,8 +822,8 @@ NPBool nsPluginInstanceOwner::ConvertPointPuppet(PuppetWidget *widget,
   nsPoint destPoint;
   switch (destSpace) {
     case NPCoordinateSpacePlugin:
-      destPoint = screenPoint - pluginFrame->GetContentRectRelativeToSelf().TopLeft() -
-        chromeSize - pluginPosition - windowPosition;
+      destPoint = screenPoint - pluginPosition -
+        pluginFrame->GetContentRectRelativeToSelf().TopLeft() / nsPresContext::AppUnitsPerCSSPixel();
       break;
     case NPCoordinateSpaceWindow:
       destPoint = screenPoint - windowPosition;
@@ -1356,7 +1354,8 @@ void nsPluginInstanceOwner::RemovePluginView()
   if (!mInstance || !mJavaView)
     return;
 
-  mozilla::widget::android::GeckoAppShell::RemovePluginView((jobject)mJavaView, mFullScreen);
+  widget::GeckoAppShell::RemovePluginView(
+      jni::Object::Ref::From(jobject(mJavaView)), mFullScreen);
   AndroidBridge::GetJNIEnv()->DeleteGlobalRef((jobject)mJavaView);
   mJavaView = nullptr;
 

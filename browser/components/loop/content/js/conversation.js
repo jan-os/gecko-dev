@@ -26,7 +26,7 @@ loop.conversation = (function(mozL10n) {
    * Master controller view for handling if incoming or outgoing calls are
    * in progress, and hence, which view to display.
    */
-  var AppControllerView = React.createClass({displayName: 'AppControllerView',
+  var AppControllerView = React.createClass({displayName: "AppControllerView",
     mixins: [Backbone.Events, sharedMixins.WindowCloseMixin],
 
     propTypes: {
@@ -42,9 +42,7 @@ loop.conversation = (function(mozL10n) {
       conversationStore: React.PropTypes.instanceOf(loop.store.ConversationStore)
                               .isRequired,
       dispatcher: React.PropTypes.instanceOf(loop.Dispatcher).isRequired,
-      roomStore: React.PropTypes.instanceOf(loop.store.RoomStore),
-      feedbackStore:
-        React.PropTypes.instanceOf(loop.store.FeedbackStore).isRequired
+      roomStore: React.PropTypes.instanceOf(loop.store.RoomStore)
     },
 
     getInitialState: function() {
@@ -64,30 +62,27 @@ loop.conversation = (function(mozL10n) {
     render: function() {
       switch(this.state.windowType) {
         case "incoming": {
-          return (IncomingConversationView({
+          return (React.createElement(IncomingConversationView, {
             client: this.props.client, 
             conversation: this.props.conversation, 
             sdk: this.props.sdk, 
-            conversationAppStore: this.props.conversationAppStore, 
-            feedbackStore: this.props.feedbackStore}
+            conversationAppStore: this.props.conversationAppStore}
           ));
         }
         case "outgoing": {
-          return (OutgoingConversationView({
+          return (React.createElement(OutgoingConversationView, {
             store: this.props.conversationStore, 
-            dispatcher: this.props.dispatcher, 
-            feedbackStore: this.props.feedbackStore}
+            dispatcher: this.props.dispatcher}
           ));
         }
         case "room": {
-          return (DesktopRoomConversationView({
+          return (React.createElement(DesktopRoomConversationView, {
             dispatcher: this.props.dispatcher, 
-            roomStore: this.props.roomStore, 
-            feedbackStore: this.props.feedbackStore}
+            roomStore: this.props.roomStore}
           ));
         }
         case "failed": {
-          return GenericFailureView({cancelCall: this.closeWindow});
+          return React.createElement(GenericFailureView, {cancelCall: this.closeWindow});
         }
         default: {
           // If we don't have a windowType, we don't know what we are yet,
@@ -155,6 +150,8 @@ loop.conversation = (function(mozL10n) {
       feedbackClient: feedbackClient
     });
 
+    loop.store.StoreMixin.register({feedbackStore: feedbackStore});
+
     // XXX Old class creation for the incoming conversation view, whilst
     // we transition across (bug 1072323).
     var conversation = new sharedModels.ConversationModel({}, {
@@ -183,10 +180,9 @@ loop.conversation = (function(mozL10n) {
       dispatcher.dispatch(new sharedActions.WindowUnload());
     });
 
-    React.renderComponent(AppControllerView({
+    React.render(React.createElement(AppControllerView, {
       conversationAppStore: conversationAppStore, 
       roomStore: roomStore, 
-      feedbackStore: feedbackStore, 
       conversationStore: conversationStore, 
       client: client, 
       conversation: conversation, 

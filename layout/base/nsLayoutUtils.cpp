@@ -908,7 +908,7 @@ GetDisplayPortFromMarginsData(nsIContent* aContent,
   //   screen resolution; since this is what Layout does most of the time,
   //   this is a good approximation. A proper solution would involve moving the
   //   choosing of the resolution to display-list building time.
-  if (alignmentX > 0 && alignmentY > 0) {
+  if (gfxPrefs::LayersTilesEnabled() && (alignmentX > 0 && alignmentY > 0)) {
     // Inflate the rectangle by 1 so that we always push to the next tile
     // boundary. This is desirable to stop from having a rectangle with a
     // moving origin occasionally being smaller when it coincidentally lines
@@ -1171,7 +1171,10 @@ nsLayoutUtils::GetChildListNameFor(nsIFrame* aChildFrame)
 nsLayoutUtils::GetBeforeFrameForContent(nsIFrame* aFrame,
                                         nsIContent* aContent)
 {
-  nsContainerFrame* genConParentFrame = aFrame->GetContentInsertionFrame();
+  // We need to call GetGenConPseudos() on the first continuation/ib-split.
+  // Find it, for symmetry with GetAfterFrameForContent.
+  nsContainerFrame* genConParentFrame =
+    FirstContinuationOrIBSplitSibling(aFrame)->GetContentInsertionFrame();
   if (!genConParentFrame) {
     return nullptr;
   }
@@ -1207,7 +1210,10 @@ nsLayoutUtils::GetBeforeFrame(nsIFrame* aFrame)
 nsLayoutUtils::GetAfterFrameForContent(nsIFrame* aFrame,
                                        nsIContent* aContent)
 {
-  nsContainerFrame* genConParentFrame = aFrame->GetContentInsertionFrame();
+  // We need to call GetGenConPseudos() on the first continuation,
+  // but callers are likely to pass the last.
+  nsContainerFrame* genConParentFrame =
+    FirstContinuationOrIBSplitSibling(aFrame)->GetContentInsertionFrame();
   if (!genConParentFrame) {
     return nullptr;
   }
@@ -1224,8 +1230,13 @@ nsLayoutUtils::GetAfterFrameForContent(nsIFrame* aFrame,
   // If the last child frame is a pseudo-frame, then try that.
   // Note that the frame we create for the generated content is also a
   // pseudo-frame and so don't drill down in that case.
+  genConParentFrame = aFrame->GetContentInsertionFrame();
+  if (!genConParentFrame) {
+    return nullptr;
+  }
   nsIFrame* lastParentContinuation =
-    nsLayoutUtils::LastContinuationWithChild(genConParentFrame);
+    LastContinuationWithChild(static_cast<nsContainerFrame*>(
+      LastContinuationOrIBSplitSibling(genConParentFrame)));
   nsIFrame* childFrame =
     lastParentContinuation->GetLastChild(nsIFrame::kPrincipalList);
   if (childFrame &&
@@ -2807,7 +2818,7 @@ CalculateFrameMetricsForDisplayPort(nsIScrollableFrame* aScrollFrame) {
 
   LayerToParentLayerScale layerToParentLayerScale(1.0f);
   metrics.SetDevPixelsPerCSSPixel(deviceScale);
-  metrics.mPresShellResolution = resolution;
+  metrics.SetPresShellResolution(resolution);
   metrics.SetCumulativeResolution(cumulativeResolution);
   metrics.SetZoom(deviceScale * cumulativeResolution * layerToParentLayerScale);
 
@@ -3228,9 +3239,8 @@ nsLayoutUtils::PaintFrame(nsRenderingContext* aRenderingContext, nsIFrame* aFram
       widget->UpdateOpaqueRegion(
         opaqueRegion.ToNearestPixels(presContext->AppUnitsPerDevPixel()));
 
-      const nsRegion& draggingRegion = builder.GetWindowDraggingRegion();
-      widget->UpdateWindowDraggingRegion(
-        draggingRegion.ToNearestPixels(presContext->AppUnitsPerDevPixel()));
+      const nsIntRegion& draggingRegion = builder.GetWindowDraggingRegion();
+      widget->UpdateWindowDraggingRegion(draggingRegion);
     }
   }
 
@@ -3903,6 +3913,25 @@ nsLayoutUtils::FirstContinuationOrIBSplitSibling(nsIFrame *aFrame)
       result = f;
     }
   }
+
+  return result;
+}
+
+nsIFrame*
+nsLayoutUtils::LastContinuationOrIBSplitSibling(nsIFrame *aFrame)
+{
+  nsIFrame *result = aFrame->FirstContinuation();
+  if (result->GetStateBits() & NS_FRAME_PART_OF_IBSPLIT) {
+    while (true) {
+      nsIFrame *f = static_cast<nsIFrame*>
+        (result->Properties().Get(nsIFrame::IBSplitSibling()));
+      if (!f)
+        break;
+      result = f;
+    }
+  }
+
+  result = result->LastContinuation();
 
   return result;
 }
@@ -5115,8 +5144,32 @@ nsLayoutUtils::AppUnitWidthOfStringBidi(const char16_t* aString,
                                              aFontMetrics);
   }
   aFontMetrics.SetTextRunRTL(false);
+  aFontMetrics.SetVertical(aFrame->GetWritingMode().IsVertical());
+  aFontMetrics.SetTextOrientation(aFrame->StyleVisibility()->mTextOrientation);
   return nsLayoutUtils::AppUnitWidthOfString(aString, aLength, aFontMetrics,
                                              aContext);
+}
+
+bool
+nsLayoutUtils::StringWidthIsGreaterThan(const nsString& aString,
+                                        nsFontMetrics& aFontMetrics,
+                                        nsRenderingContext& aContext,
+                                        nscoord aWidth)
+{
+  const char16_t *string = aString.get();
+  uint32_t length = aString.Length();
+  uint32_t maxChunkLength = GetMaxChunkLength(aFontMetrics);
+  nscoord width = 0;
+  while (length > 0) {
+    int32_t len = FindSafeLength(string, length, maxChunkLength);
+    width += aFontMetrics.GetWidth(string, len, &aContext);
+    if (width > aWidth) {
+      return true;
+    }
+    length -= len;
+    string += len;
+  }
+  return false;
 }
 
 nsBoundingMetrics
@@ -5156,11 +5209,19 @@ nsLayoutUtils::DrawString(const nsIFrame*       aFrame,
                           nsStyleContext*       aStyleContext)
 {
   nsresult rv = NS_ERROR_FAILURE;
+
+  // If caller didn't pass a style context, use the frame's.
+  if (!aStyleContext) {
+    aStyleContext = aFrame->StyleContext();
+  }
+  aFontMetrics.SetVertical(WritingMode(aStyleContext).IsVertical());
+  aFontMetrics.SetTextOrientation(
+    aStyleContext->StyleVisibility()->mTextOrientation);
+
   nsPresContext* presContext = aFrame->PresContext();
   if (presContext->BidiEnabled()) {
     nsBidiLevel level =
-      nsBidiPresUtils::BidiLevelFromStyle(aStyleContext ?
-                                          aStyleContext : aFrame->StyleContext());
+      nsBidiPresUtils::BidiLevelFromStyle(aStyleContext);
     rv = nsBidiPresUtils::RenderText(aString, aLength, level,
                                      presContext, *aContext, *aContext,
                                      aFontMetrics,
@@ -7734,8 +7795,7 @@ nsLayoutUtils::IsOutlineStyleAutoEnabled()
 /* static */ void
 nsLayoutUtils::SetBSizeFromFontMetrics(const nsIFrame* aFrame,
                                        nsHTMLReflowMetrics& aMetrics,
-                                       const nsHTMLReflowState& aReflowState,
-                                       LogicalMargin aFramePadding, 
+                                       const LogicalMargin& aFramePadding,
                                        WritingMode aLineWM,
                                        WritingMode aFrameWM)
 {
@@ -7763,6 +7823,5 @@ nsLayoutUtils::SetBSizeFromFontMetrics(const nsIFrame* aFrame,
   }
   aMetrics.SetBlockStartAscent(aMetrics.BlockStartAscent() +
                                aFramePadding.BStart(aFrameWM));
-  aMetrics.BSize(aLineWM) +=
-    aReflowState.ComputedLogicalBorderPadding().BStartEnd(aFrameWM);
+  aMetrics.BSize(aLineWM) += aFramePadding.BStartEnd(aFrameWM);
 }
