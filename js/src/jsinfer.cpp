@@ -420,7 +420,7 @@ TypeSet::isSubset(const TypeSet *other) const
 }
 
 bool
-TypeSet::enumerateTypes(TypeList *list)
+TypeSet::enumerateTypes(TypeList *list) const
 {
     /* If any type is possible, there's no need to worry about specifics. */
     if (flags & TYPE_FLAG_UNKNOWN)
@@ -1071,6 +1071,12 @@ TaggedProto
 TypeObjectKey::proto()
 {
     MOZ_ASSERT(hasTenuredProto());
+    return isTypeObject() ? asTypeObject()->proto() : asSingleObject()->getTaggedProto();
+}
+
+TaggedProto
+TypeObjectKey::protoMaybeInNursery()
+{
     return isTypeObject() ? asTypeObject()->proto() : asSingleObject()->getTaggedProto();
 }
 
@@ -4046,8 +4052,13 @@ TypeNewScript::maybeAnalyze(JSContext *cx, TypeObject *type, bool *regenerate, b
         // For now, we require all preliminary objects to have only simple
         // lineages of plain data properties.
         Shape *shape = obj->lastProperty();
-        if (shape->inDictionary() || !OnlyHasDataProperties(shape))
+        if (shape->inDictionary() ||
+            !OnlyHasDataProperties(shape) ||
+            shape->getObjectFlags() != 0 ||
+            shape->getObjectMetadata() != nullptr)
+        {
             return true;
+        }
 
         maxSlotSpan = Max<size_t>(maxSlotSpan, obj->slotSpan());
 
@@ -4380,6 +4391,9 @@ JSObject::splicePrototype(JSContext *cx, const Class *clasp, Handle<TaggedProto>
 
     /* Inner objects may not appear on prototype chains. */
     MOZ_ASSERT_IF(proto.isObject(), !proto.toObject()->getClass()->ext.outerObject);
+
+    if (proto.isObject() && !proto.toObject()->setDelegate(cx))
+        return false;
 
     /*
      * Force type instantiation when splicing lazy types. This may fail,

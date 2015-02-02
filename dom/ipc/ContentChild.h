@@ -332,6 +332,7 @@ public:
 
     virtual bool RecvLastPrivateDocShellDestroyed() MOZ_OVERRIDE;
 
+    virtual bool RecvVolumes(InfallibleTArray<VolumeInfo>&& aVolumes) MOZ_OVERRIDE;
     virtual bool RecvFilePathUpdate(const nsString& aStorageType,
                                     const nsString& aStorageName,
                                     const nsString& aPath,
@@ -480,6 +481,9 @@ private:
 
     DISALLOW_EVIL_CONSTRUCTORS(ContentChild);
 };
+
+uint64_t
+NextWindowID();
 
 } // namespace dom
 } // namespace mozilla

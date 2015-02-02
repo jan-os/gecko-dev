@@ -456,6 +456,11 @@ class MDefinition : public MNode
     InlineScriptTree *trackedTree() const {
         return trackedSite_ ? trackedSite_->tree() : nullptr;
     }
+    TrackedOptimizations *trackedOptimizations() const {
+        return trackedSite_ && trackedSite_->hasOptimizations()
+               ? trackedSite_->optimizations()
+               : nullptr;
+    }
 
     JSScript *profilerLeaveScript() const {
         return trackedTree()->outermostCaller()->script();
@@ -1322,6 +1327,33 @@ class MConstant : public MNullaryInstruction
     bool canProduceFloat32() const MOZ_OVERRIDE;
 
     ALLOW_CLONE(MConstant)
+};
+
+class MNurseryObject : public MNullaryInstruction
+{
+    // Index in MIRGenerator::nurseryObjects_.
+    uint32_t index_;
+
+  protected:
+    MNurseryObject(JSObject *obj, uint32_t index, types::CompilerConstraintList *constraints);
+
+  public:
+    INSTRUCTION_HEADER(NurseryObject)
+    static MNurseryObject *New(TempAllocator &alloc, JSObject *obj, uint32_t index,
+                               types::CompilerConstraintList *constraints = nullptr);
+
+    HashNumber valueHash() const MOZ_OVERRIDE;
+    bool congruentTo(const MDefinition *ins) const MOZ_OVERRIDE;
+
+    uint32_t index() const {
+        return index_;
+    }
+
+    AliasSet getAliasSet() const MOZ_OVERRIDE {
+        return AliasSet::None();
+    }
+
+    ALLOW_CLONE(MNurseryObject)
 };
 
 // Generic constructor of SIMD valuesX4.
@@ -9820,7 +9852,7 @@ class MGuardObjectIdentity
   : public MUnaryInstruction,
     public SingleObjectPolicy::Data
 {
-    AlwaysTenured<JSObject *> singleObject_;
+    AlwaysTenuredObject singleObject_;
     bool bailOnEquality_;
 
     MGuardObjectIdentity(MDefinition *obj, JSObject *singleObject, bool bailOnEquality)

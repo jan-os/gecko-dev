@@ -76,7 +76,6 @@
 #include "nsICancelable.h"
 #include "gfxPrefs.h"
 #include "nsILoginManagerPrompter.h"
-#include "nsPIWindowRoot.h"
 #include <algorithm>
 
 using namespace mozilla::dom;
@@ -317,27 +316,7 @@ TabParent::RemoveTabParentFromTable(uint64_t aLayersId)
 void
 TabParent::SetOwnerElement(Element* aElement)
 {
-  // If we held previous content then unregister for its events.
-  if (mFrameElement && mFrameElement->OwnerDoc()->GetWindow()) {
-    nsCOMPtr<nsPIDOMWindow> window = mFrameElement->OwnerDoc()->GetWindow();
-    nsCOMPtr<EventTarget> eventTarget = window->GetTopWindowRoot();
-    if (eventTarget) {
-      eventTarget->RemoveEventListener(NS_LITERAL_STRING("MozUpdateWindowPos"),
-                                       this, false);
-    }
-  }
-
-  // Update to the new content, and register to listen for events from it.
   mFrameElement = aElement;
-  if (mFrameElement && mFrameElement->OwnerDoc()->GetWindow()) {
-    nsCOMPtr<nsPIDOMWindow> window = mFrameElement->OwnerDoc()->GetWindow();
-    nsCOMPtr<EventTarget> eventTarget = window->GetTopWindowRoot();
-    if (eventTarget) {
-      eventTarget->AddEventListener(NS_LITERAL_STRING("MozUpdateWindowPos"),
-                                    this, false, false);
-    }
-  }
-
   TryCacheDPIAndScale();
 }
 
@@ -373,8 +352,6 @@ TabParent::Destroy()
     return;
   }
 
-  SetOwnerElement(nullptr);
-
   // If this fails, it's most likely due to a content-process crash,
   // and auto-cleanup will kick in.  Otherwise, the child side will
   // destroy itself and send back __delete__().
@@ -389,6 +366,15 @@ TabParent::Destroy()
   if (XRE_GetProcessType() == GeckoProcessType_Default) {
     Manager()->AsContentParent()->NotifyTabDestroying(this);
   }
+
+  // Let all PluginWidgets know we are tearing down. Prevents
+  // these objects from sending async events after the child side
+  // is shut down.
+  const nsTArray<PPluginWidgetParent*>& kids = ManagedPPluginWidgetParent();
+  for (uint32_t idx = 0; idx < kids.Length(); ++idx) {
+      static_cast<mozilla::plugins::PluginWidgetParent*>(kids[idx])->ParentDestroy();
+  }
+
   mMarkedDestroying = true;
 }
 
@@ -823,9 +809,8 @@ TabParent::UpdateDimensions(const nsIntRect& rect, const nsIntSize& size,
     mRect = rect;
     mDimensions = size;
     mOrientation = orientation;
-    mChromeDisp = aChromeDisp;
 
-    unused << SendUpdateDimensions(mRect, mDimensions, mOrientation, mChromeDisp);
+    unused << SendUpdateDimensions(mRect, mDimensions, mOrientation, aChromeDisp);
   }
 }
 
@@ -2141,6 +2126,7 @@ TabParent::RecvGetDefaultScale(double* aValue)
 bool
 TabParent::RecvGetWidgetNativeData(WindowsHandle* aValue)
 {
+  *aValue = 0;
   nsCOMPtr<nsIContent> content = do_QueryInterface(mFrameElement);
   if (content) {
     nsIPresShell* shell = content->OwnerDoc()->GetShell();
@@ -2151,11 +2137,10 @@ TabParent::RecvGetWidgetNativeData(WindowsHandle* aValue)
       if (widget) {
         *aValue = reinterpret_cast<WindowsHandle>(
           widget->GetNativeData(NS_NATIVE_SHAREABLE_WINDOW));
-        return true;
       }
     }
   }
-  return false;
+  return true;
 }
 
 bool
@@ -2572,27 +2557,6 @@ TabParent::DeallocPPluginWidgetParent(mozilla::plugins::PPluginWidgetParent* aAc
 {
   delete aActor;
   return true;
-}
-
-nsresult
-TabParent::HandleEvent(nsIDOMEvent* aEvent)
-{
-  nsAutoString eventType;
-  aEvent->GetType(eventType);
-
-  if (eventType.EqualsLiteral("MozUpdateWindowPos")) {
-    // This event is sent when the widget moved.  Therefore we only update
-    // the position.
-    nsRefPtr<nsFrameLoader> frameLoader = GetFrameLoader();
-    if (!frameLoader) {
-      return NS_OK;
-    }
-    nsIntRect windowDims;
-    NS_ENSURE_SUCCESS(frameLoader->GetWindowDimensions(windowDims), NS_ERROR_FAILURE);
-    UpdateDimensions(windowDims, mDimensions, mChromeDisp);
-    return NS_OK;
-  }
-  return NS_OK;
 }
 
 class FakeChannel MOZ_FINAL : public nsIChannel,

@@ -62,6 +62,9 @@
          value.-->
     <dimen name="favicon_largest_interesting_size">32dp</dimen>
 
+    <dimen name="firstrun_content_width">300dp</dimen>
+    <dimen name="firstrun_min_height">180dp</dimen>
+
     <!-- Site security icon -->
     <!-- If one of these values changes, they all should. -->
     <dimen name="site_security_bottom_margin">.5dp</dimen>
@@ -191,6 +194,8 @@
     <dimen name="tab_history_title_text_size">14sp</dimen>
     <dimen name="tab_history_bg_width">2dp</dimen>
     <dimen name="tab_history_border_padding">2dp</dimen>
+
+    <dimen name="horizontal_drag_area">256dp</dimen>
 
     <!-- Find-In-Page dialog dimensions. -->
     <dimen name="find_in_page_text_margin_left">5dip</dimen>

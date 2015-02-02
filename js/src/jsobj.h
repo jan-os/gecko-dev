@@ -365,7 +365,9 @@ class JSObject : public js::gc::Cell
 
     JSObject *getProto() const {
         MOZ_ASSERT(!uninlinedIsProxy());
-        return getTaggedProto().toObjectOrNull();
+        JSObject *proto = getTaggedProto().toObjectOrNull();
+        MOZ_ASSERT_IF(proto && proto->isNative(), proto->isDelegate());
+        return proto;
     }
 
     // Normal objects and a subset of proxies have uninteresting [[Prototype]].
@@ -1092,18 +1094,6 @@ extern bool
 SetClassAndProto(JSContext *cx, HandleObject obj,
                  const Class *clasp, Handle<TaggedProto> proto);
 
-/*
- * Property-lookup-based access to interface and prototype objects for classes.
- * If the class is built-in (hhas a non-null JSProtoKey), these forward to
- * GetClass{Object,Prototype}.
- */
-
-bool
-FindClassObject(ExclusiveContext *cx, MutableHandleObject protop, const Class *clasp);
-
-extern bool
-FindClassPrototype(ExclusiveContext *cx, MutableHandleObject protop, const Class *clasp);
-
 } /* namespace js */
 
 /*
@@ -1236,7 +1226,7 @@ js_FindVariableScope(JSContext *cx, JSFunction **funp);
 namespace js {
 
 bool
-LookupPropertyPure(ExclusiveContext *cx, JSObject *obj, jsid id, NativeObject **objp,
+LookupPropertyPure(ExclusiveContext *cx, JSObject *obj, jsid id, JSObject **objp,
                    Shape **propp);
 
 bool

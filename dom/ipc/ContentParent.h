@@ -153,8 +153,8 @@ public:
                                         TabId* aTabId) MOZ_OVERRIDE;
     virtual bool RecvBridgeToChildProcess(const ContentParentId& aCpId) MOZ_OVERRIDE;
 
-    virtual bool RecvLoadPlugin(const uint32_t& aPluginId) MOZ_OVERRIDE;
-    virtual bool RecvConnectPluginBridge(const uint32_t& aPluginId) MOZ_OVERRIDE;
+    virtual bool RecvLoadPlugin(const uint32_t& aPluginId, nsresult* aRv) MOZ_OVERRIDE;
+    virtual bool RecvConnectPluginBridge(const uint32_t& aPluginId, nsresult* aRv) MOZ_OVERRIDE;
     virtual bool RecvFindPlugins(const uint32_t& aPluginEpoch,
                                  nsTArray<PluginTag>* aPlugins,
                                  uint32_t* aNewPluginEpoch) MOZ_OVERRIDE;
@@ -409,6 +409,11 @@ private:
     virtual ~ContentParent();
 
     void Init();
+
+    // Some information could be sent to content very early, it
+    // should be send from this function. This function should only be
+    // called after the process has been transformed to app or browser.
+    void ForwardKnownInfo();
 
     // If the frame element indicates that the child process is "critical" and
     // has a pending system message, this function acquires the CPU wake lock on
@@ -695,7 +700,6 @@ private:
     virtual bool RecvAudioChannelChangeDefVolChannel(const int32_t& aChannel,
                                                      const bool& aHidden) MOZ_OVERRIDE;
     virtual bool RecvGetSystemMemory(const uint64_t& getterId) MOZ_OVERRIDE;
-    virtual bool RecvGetVolumes(InfallibleTArray<VolumeInfo>* aResult) MOZ_OVERRIDE;
 
     virtual bool RecvDataStoreGetStores(
                        const nsString& aName,
@@ -811,6 +815,10 @@ private:
     // false, but some previously scheduled IPC traffic may still pass
     // through.
     bool mIsAlive;
+
+    // True only the if process is already a browser or app or has
+    // been transformed into one.
+    bool mMetamorphosed;
 
     bool mSendPermissionUpdates;
     bool mSendDataStoreInfos;

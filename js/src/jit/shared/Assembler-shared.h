@@ -30,6 +30,10 @@
 namespace js {
 namespace jit {
 
+namespace Disassembler {
+class HeapAccess;
+};
+
 static const uint32_t Simd128DataSize = 4 * sizeof(int32_t);
 static_assert(Simd128DataSize == 4 * sizeof(int32_t), "SIMD data should be able to contain int32x4");
 static_assert(Simd128DataSize == 4 * sizeof(float), "SIMD data should be able to contain float32x4");
@@ -229,6 +233,22 @@ class ImmMaybeNurseryPtr
     }
 };
 
+// Dummy value used for nursery pointers during Ion compilation, see
+// LNurseryObject.
+class IonNurseryPtr
+{
+    const gc::Cell *ptr;
+
+  public:
+    friend class ImmGCPtr;
+
+    explicit IonNurseryPtr(const gc::Cell *ptr) : ptr(ptr)
+    {
+        MOZ_ASSERT(ptr);
+        MOZ_ASSERT(uintptr_t(ptr) & 0x1);
+    }
+};
+
 // Used for immediates which require relocation.
 class ImmGCPtr
 {
@@ -239,6 +259,15 @@ class ImmGCPtr
     {
         MOZ_ASSERT(!IsPoisonedPtr(ptr));
         MOZ_ASSERT_IF(ptr, ptr->isTenured());
+
+        // asm.js shouldn't be creating GC things
+        MOZ_ASSERT(!IsCompilingAsmJS());
+    }
+
+    explicit ImmGCPtr(IonNurseryPtr ptr) : value(ptr.ptr)
+    {
+        MOZ_ASSERT(!IsPoisonedPtr(value));
+        MOZ_ASSERT(value);
 
         // asm.js shouldn't be creating GC things
         MOZ_ASSERT(!IsCompilingAsmJS());

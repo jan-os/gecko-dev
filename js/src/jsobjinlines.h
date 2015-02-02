@@ -550,25 +550,9 @@ inline T *
 NewObjectWithGivenProto(ExclusiveContext *cx, JSObject *proto, JSObject *parent,
                         gc::AllocKind allocKind, NewObjectKind newKind = GenericObject)
 {
-    JSObject *obj = NewObjectWithGivenProto(cx, &T::class_, TaggedProto(proto), parent, newKind);
+    JSObject *obj = NewObjectWithGivenProto(cx, &T::class_, TaggedProto(proto), parent, allocKind,
+                                            newKind);
     return obj ? &obj->as<T>() : nullptr;
-}
-
-inline bool
-FindProto(ExclusiveContext *cx, const js::Class *clasp, MutableHandleObject proto)
-{
-    if (!FindClassPrototype(cx, proto, clasp))
-        return false;
-
-    if (!proto) {
-        // We're looking for the prototype of a class that is currently being
-        // resolved; the global object's resolve hook is on the
-        // stack. js::FindClassPrototype detects this goofy case and returns
-        // true with proto null. Fall back on Object.prototype.
-        MOZ_ASSERT(JSCLASS_CACHED_PROTO_KEY(clasp) == JSProto_Null);
-        return GetBuiltinPrototype(cx, JSProto_Object, proto);
-    }
-    return true;
 }
 
 /*

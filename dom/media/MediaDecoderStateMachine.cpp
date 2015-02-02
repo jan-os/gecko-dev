@@ -1387,11 +1387,11 @@ void MediaDecoderStateMachine::SetVolume(double volume)
   }
 }
 
-void MediaDecoderStateMachine::SetAudioCaptured(bool aCaptured)
+void MediaDecoderStateMachine::SetAudioCaptured()
 {
   NS_ASSERTION(NS_IsMainThread(), "Should be on main thread.");
-  ReentrantMonitorAutoEnter mon(mDecoder->GetReentrantMonitor());
-  if (!mAudioCaptured && aCaptured && !mStopAudioThread) {
+  AssertCurrentThreadInMonitor();
+  if (!mAudioCaptured && !mStopAudioThread) {
     // Make sure the state machine runs as soon as possible. That will
     // stop the audio sink.
     // If mStopAudioThread is true then we're already stopping the audio sink
@@ -1405,7 +1405,7 @@ void MediaDecoderStateMachine::SetAudioCaptured(bool aCaptured)
       ResyncAudioClock();
     }
   }
-  mAudioCaptured = aCaptured;
+  mAudioCaptured = true;
 }
 
 double MediaDecoderStateMachine::GetCurrentTime() const
@@ -1416,6 +1416,16 @@ double MediaDecoderStateMachine::GetCurrentTime() const
                "Should be on main, decode, or state machine thread.");
 
   return static_cast<double>(mCurrentFrameTime) / static_cast<double>(USECS_PER_S);
+}
+
+int64_t MediaDecoderStateMachine::GetCurrentTimeUs() const
+{
+  NS_ASSERTION(NS_IsMainThread() ||
+               OnStateMachineThread() ||
+               OnDecodeThread(),
+               "Should be on main, decode, or state machine thread.");
+
+  return mCurrentFrameTime;
 }
 
 bool MediaDecoderStateMachine::IsRealTime() const {
@@ -1578,9 +1588,9 @@ void MediaDecoderStateMachine::StartDecoding()
 
 void MediaDecoderStateMachine::StartWaitForResources()
 {
-  NS_ASSERTION(OnStateMachineThread() || OnDecodeThread(),
-               "Should be on state machine or decode thread.");
-  AssertCurrentThreadInMonitor();
+  ReentrantMonitorAutoEnter mon(mDecoder->GetReentrantMonitor());
+  NS_ASSERTION(OnDecodeThread(),
+               "Should be on decode thread.");
   SetState(DECODER_STATE_WAIT_FOR_RESOURCES);
   DECODER_LOG("StartWaitForResources");
 }
@@ -1782,7 +1792,9 @@ MediaDecoderStateMachine::StartSeek(const SeekTarget& aTarget)
 
   DECODER_LOG("Changed state to SEEKING (to %lld)", mSeekTarget.mTime);
   SetState(DECODER_STATE_SEEKING);
-  mDecoder->RecreateDecodedStreamIfNecessary(seekTime - mStartTime);
+  if (mAudioCaptured) {
+    mDecoder->RecreateDecodedStream(seekTime - mStartTime);
+  }
   ScheduleStateMachine();
 }
 
@@ -1967,7 +1979,7 @@ MediaDecoderStateMachine::EnsureAudioDecodeTaskQueued()
   SAMPLE_LOG("EnsureAudioDecodeTaskQueued isDecoding=%d status=%d",
               IsAudioDecoding(), mAudioRequestStatus);
 
-  if (mState >= DECODER_STATE_COMPLETED) {
+  if (mState >= DECODER_STATE_COMPLETED || mState == DECODER_STATE_DORMANT) {
     return NS_OK;
   }
 
@@ -2012,7 +2024,7 @@ MediaDecoderStateMachine::EnsureVideoDecodeTaskQueued()
   NS_ASSERTION(OnStateMachineThread() || OnDecodeThread(),
                "Should be on state machine or decode thread.");
 
-  if (mState >= DECODER_STATE_COMPLETED) {
+  if (mState >= DECODER_STATE_COMPLETED || mState == DECODER_STATE_DORMANT) {
     return NS_OK;
   }
 
@@ -2179,28 +2191,28 @@ nsresult MediaDecoderStateMachine::DecodeMetadata()
   MOZ_ASSERT(mState == DECODER_STATE_DECODING_METADATA);
   DECODER_LOG("Decoding Media Headers");
 
-  mReader->PreReadMetadata();
-
-  if (mReader->IsWaitingMediaResources()) {
-    StartWaitForResources();
-    return NS_OK;
-  }
-
   nsresult res;
   MediaInfo info;
+  bool isAwaitingResources = false;
   {
     ReentrantMonitorAutoExit exitMon(mDecoder->GetReentrantMonitor());
-    res = mReader->ReadMetadata(&info, getter_Transfers(mMetadataTags));
-  }
+    mReader->PreReadMetadata();
 
-  if (NS_SUCCEEDED(res)) {
-    if (mState == DECODER_STATE_DECODING_METADATA &&
-        mReader->IsWaitingMediaResources()) {
-      // change state to DECODER_STATE_WAIT_FOR_RESOURCES
+    if (mReader->IsWaitingMediaResources()) {
       StartWaitForResources();
-      // affect values only if ReadMetadata succeeds
       return NS_OK;
     }
+    res = mReader->ReadMetadata(&info, getter_Transfers(mMetadataTags));
+    isAwaitingResources = mReader->IsWaitingMediaResources();
+  }
+
+  if (NS_SUCCEEDED(res) &&
+      mState == DECODER_STATE_DECODING_METADATA &&
+      isAwaitingResources) {
+    // change state to DECODER_STATE_WAIT_FOR_RESOURCES
+    StartWaitForResources();
+    // affect values only if ReadMetadata succeeds
+    return NS_OK;
   }
 
   if (NS_SUCCEEDED(res)) {
@@ -2766,12 +2778,11 @@ nsresult MediaDecoderStateMachine::RunStateMachine()
       // Now that those threads are stopped, there's no possibility of
       // mPendingWakeDecoder being needed again. Revoke it.
       mPendingWakeDecoder = nullptr;
-      {
-        ReentrantMonitorAutoExit exitMon(mDecoder->GetReentrantMonitor());
-        // Wait for the thread decoding, if any, to exit.
-        DecodeTaskQueue()->AwaitIdle();
-        mReader->ReleaseMediaResources();
-      }
+      DebugOnly<nsresult> rv = DecodeTaskQueue()->Dispatch(
+      NS_NewRunnableMethod(mReader, &MediaDecoderReader::ReleaseMediaResources));
+      MOZ_ASSERT(NS_SUCCEEDED(rv));
+      mAudioRequestStatus = RequestStatus::Idle;
+      mVideoRequestStatus = RequestStatus::Idle;
       return NS_OK;
     }
 

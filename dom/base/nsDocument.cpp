@@ -2290,6 +2290,11 @@ nsDocument::Reset(nsIChannel* aChannel, nsILoadGroup* aLoadGroup)
 
   ResetToURI(uri, aLoadGroup, principal);
 
+  // Note that, since mTiming does not change during a reset, the
+  // navigationStart time remains unchanged and therefore any future new
+  // timeline will have the same global clock time as the old one.
+  mAnimationTimeline = nullptr;
+
   nsCOMPtr<nsIPropertyBag2> bag = do_QueryInterface(aChannel);
   if (bag) {
     nsCOMPtr<nsIURI> baseURI;
@@ -6149,7 +6154,7 @@ nsDocument::RegisterElement(JSContext* aCx, const nsAString& aType,
     }
 
     if (!aOptions.mPrototype) {
-      protoObject = JS_NewObject(aCx, nullptr, htmlProto, JS::NullPtr());
+      protoObject = JS_NewObjectWithGivenProto(aCx, nullptr, htmlProto, JS::NullPtr());
       if (!protoObject) {
         rv.Throw(NS_ERROR_UNEXPECTED);
         return;

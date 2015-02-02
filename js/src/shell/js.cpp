@@ -1035,7 +1035,7 @@ CacheEntry(JSContext* cx, unsigned argc, JS::Value *vp)
         return false;
     }
 
-    RootedObject obj(cx, JS_NewObject(cx, &CacheEntry_class, JS::NullPtr(), JS::NullPtr()));
+    RootedObject obj(cx, JS_NewObject(cx, &CacheEntry_class));
     if (!obj)
         return false;
 
@@ -4039,7 +4039,7 @@ ObjectEmulatingUndefined(JSContext *cx, unsigned argc, jsval *vp)
         JSCLASS_EMULATES_UNDEFINED
     };
 
-    RootedObject obj(cx, JS_NewObject(cx, &cls, JS::NullPtr(), JS::NullPtr()));
+    RootedObject obj(cx, JS_NewObject(cx, &cls));
     if (!obj)
         return false;
     args.rval().setObject(*obj);
@@ -4426,9 +4426,9 @@ static const JSFunctionSpecWithHelp shell_functions[] = {
 "  themselves from roots that keep |thing| from being collected. (We could make\n"
 "  this distinction if it is useful.)\n"
 "\n"
-"  If any references are found by the conservative scanner, the references\n"
-"  object will have a property named \"edge: machine stack\"; the referrers will\n"
-"  be 'null', because they are roots."),
+"  If there are any references on the native stack, the references\n"
+"  object will have properties named like \"edge: exact-value \"; the referrers\n"
+"  will be 'null', because they are roots."),
 
 #endif
     JS_FN_HELP("build", BuildDate, 0, 0,
@@ -5092,7 +5092,7 @@ dom_constructor(JSContext* cx, unsigned argc, JS::Value *vp)
     }
 
     RootedObject proto(cx, &protov.toObject());
-    RootedObject domObj(cx, JS_NewObject(cx, &dom_class, proto, JS::NullPtr()));
+    RootedObject domObj(cx, JS_NewObjectWithGivenProto(cx, &dom_class, proto, JS::NullPtr()));
     if (!domObj)
         return false;
 
@@ -5938,6 +5938,7 @@ main(int argc, char **argv, char **envp)
                              "unnecessarily entrained by inner functions")
 #endif
         || !op.addBoolOption('\0', "no-ggc", "Disable Generational GC")
+        || !op.addBoolOption('\0', "no-cgc", "Disable Compacting GC")
         || !op.addBoolOption('\0', "no-incremental-gc", "Disable Incremental GC")
         || !op.addIntOption('\0', "available-memory", "SIZE",
                             "Select GC settings based on available memory (MB)", 0)
@@ -6046,9 +6047,14 @@ main(int argc, char **argv, char **envp)
     gInterruptFunc.init(rt, NullValue());
 
     JS_SetGCParameter(rt, JSGC_MAX_BYTES, 0xffffffff);
+
     Maybe<JS::AutoDisableGenerationalGC> noggc;
     if (op.getBoolOption("no-ggc"))
         noggc.emplace(rt);
+
+    Maybe<AutoDisableCompactingGC> nocgc;
+    if (op.getBoolOption("no-cgc"))
+        nocgc.emplace(rt);
 
     size_t availMem = op.getIntOption("available-memory");
     if (availMem > 0)

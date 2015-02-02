@@ -676,6 +676,7 @@ MConstant::MConstant(const js::Value &vp, types::CompilerConstraintList *constra
     if (vp.isObject()) {
         // Create a singleton type set for the object. This isn't necessary for
         // other types as the result type encodes all needed information.
+        MOZ_ASSERT(!IsInsideNursery(&vp.toObject()));
         setResultTypeSet(MakeSingletonTypeSet(constraints, &vp.toObject()));
     }
     if (vp.isMagic() && vp.whyMagic() == JS_UNINITIALIZED_LEXICAL) {
@@ -695,6 +696,7 @@ MConstant::MConstant(const js::Value &vp, types::CompilerConstraintList *constra
 MConstant::MConstant(JSObject *obj)
   : value_(ObjectValue(*obj))
 {
+    MOZ_ASSERT(!IsInsideNursery(obj));
     setResultType(MIRType_Object);
     setMovable();
 }
@@ -802,6 +804,39 @@ MConstant::canProduceFloat32() const
     if (type() == MIRType_Double)
         return IsFloat32Representable(value_.toDouble());
     return true;
+}
+
+MNurseryObject::MNurseryObject(JSObject *obj, uint32_t index, types::CompilerConstraintList *constraints)
+  : index_(index)
+{
+    setResultType(MIRType_Object);
+
+    MOZ_ASSERT(IsInsideNursery(obj));
+    MOZ_ASSERT(!obj->hasSingletonType());
+    setResultTypeSet(MakeSingletonTypeSet(constraints, obj));
+
+    setMovable();
+}
+
+MNurseryObject *
+MNurseryObject::New(TempAllocator &alloc, JSObject *obj, uint32_t index,
+                    types::CompilerConstraintList *constraints)
+{
+    return new(alloc) MNurseryObject(obj, index, constraints);
+}
+
+HashNumber
+MNurseryObject::valueHash() const
+{
+    return HashNumber(index_);
+}
+
+bool
+MNurseryObject::congruentTo(const MDefinition *ins) const
+{
+    if (!ins->isNurseryObject())
+        return false;
+    return ins->toNurseryObject()->index_ == index_;
 }
 
 MDefinition*
@@ -2058,18 +2093,17 @@ MMinMax::foldsTo(TempAllocator &alloc)
 
         // The folded MConstant should maintain the same MIRType with
         // the original MMinMax.
-        MConstant *constant;
         if (type() == MIRType_Int32) {
-            int32_t cast = static_cast<int32_t>(result);
-            MOZ_ASSERT(cast == result);
-            constant = MConstant::New(alloc, Int32Value(cast));
+            int32_t cast;
+            if (mozilla::NumberEqualsInt32(result, &cast))
+                return MConstant::New(alloc, Int32Value(cast));
         } else {
             MOZ_ASSERT(IsFloatingPointType(type()));
-            constant = MConstant::New(alloc, DoubleValue(result));
+            MConstant *constant = MConstant::New(alloc, DoubleValue(result));
             if (type() == MIRType_Float32)
                 constant->setResultType(MIRType_Float32);
+            return constant;
         }
-        return constant;
     }
 
     MDefinition *operand = lhs()->isConstantValue() ? rhs() : lhs();
@@ -3045,6 +3079,32 @@ MDefinition *
 MToInt32::foldsTo(TempAllocator &alloc)
 {
     MDefinition *input = getOperand(0);
+
+    // Fold this operation if the input operand is constant.
+    if (input->isConstant()) {
+        Value val = input->toConstant()->value();
+        DebugOnly<MacroAssembler::IntConversionInputKind> convert = conversion();
+        switch (input->type()) {
+          case MIRType_Null:
+            MOZ_ASSERT(convert == MacroAssembler::IntConversion_Any);
+            return MConstant::New(alloc, Int32Value(0));
+          case MIRType_Boolean:
+            MOZ_ASSERT(convert == MacroAssembler::IntConversion_Any ||
+                       convert == MacroAssembler::IntConversion_NumbersOrBoolsOnly);
+            return MConstant::New(alloc, Int32Value(val.toBoolean()));
+          case MIRType_Int32:
+            return MConstant::New(alloc, Int32Value(val.toInt32()));
+          case MIRType_Float32:
+          case MIRType_Double:
+            int32_t ival;
+            // Only the value within the range of Int32 can be substitued as constant.
+            if (mozilla::NumberEqualsInt32(val.toNumber(), &ival))
+                return MConstant::New(alloc, Int32Value(ival));
+          default:
+            break;
+        }
+    }
+
     if (input->type() == MIRType_Int32)
         return input;
     return this;

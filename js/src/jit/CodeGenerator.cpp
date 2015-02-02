@@ -2133,6 +2133,8 @@ CodeGenerator::visitMoveGroup(LMoveGroup *group)
     masm.propagateOOM(resolver.resolve());
 
     MoveEmitter emitter(masm);
+    if (group->maybeScratchRegister().isGeneralReg())
+        emitter.setScratchRegister(group->maybeScratchRegister().toGeneralReg()->reg());
     emitter.emit(resolver);
     emitter.finish();
 }
@@ -2150,6 +2152,19 @@ CodeGenerator::visitPointer(LPointer *lir)
         masm.movePtr(ImmGCPtr(lir->gcptr()), ToRegister(lir->output()));
     else
         masm.movePtr(ImmPtr(lir->ptr()), ToRegister(lir->output()));
+}
+
+void
+CodeGenerator::visitNurseryObject(LNurseryObject *lir)
+{
+    Register output = ToRegister(lir->output());
+    uint32_t index = lir->mir()->index();
+
+    // Store a dummy JSObject pointer. We will fix it up on the main thread,
+    // in JitCode::fixupNurseryObjects. The low bit is set to distinguish
+    // it from a real JSObject pointer.
+    JSObject *ptr = reinterpret_cast<JSObject*>((uintptr_t(index) << 1) | 1);
+    masm.movePtr(ImmGCPtr(IonNurseryPtr(ptr)), output);
 }
 
 void
@@ -3806,9 +3821,19 @@ CodeGenerator::generateBody()
                     if (!addNativeToBytecodeEntry(iter->mirRaw()->trackedSite()))
                         return false;
                 }
+
+                // Track the start native offset of optimizations.
+                if (iter->mirRaw()->trackedOptimizations()) {
+                    if (!addTrackedOptimizationsEntry(iter->mirRaw()->trackedOptimizations()))
+                        return false;
+                }
             }
 
             iter->accept(this);
+
+            // Track the end native offset of optimizations.
+            if (iter->mirRaw() && iter->mirRaw()->trackedOptimizations())
+                extendTrackedOptimizationsEntry(iter->mirRaw()->trackedOptimizations());
 
 #ifdef DEBUG
             if (!counts)
@@ -7235,6 +7260,28 @@ CodeGenerator::link(JSContext *cx, types::CompilerConstraintList *constraints)
         // nativeToBytecodeScriptList_ is no longer needed.
         js_free(nativeToBytecodeScriptList_);
 
+        // Generate the tracked optimizations map.
+        if (isOptimizationTrackingEnabled()) {
+            // Treat OOMs and failures as if optimization tracking were turned off.
+            types::TypeSet::TypeList *allTypes = cx->new_<types::TypeSet::TypeList>();
+            if (allTypes && generateCompactTrackedOptimizationsMap(cx, code, allTypes)) {
+                const uint8_t *optsRegionTableAddr = trackedOptimizationsMap_ +
+                                                     trackedOptimizationsRegionTableOffset_;
+                const IonTrackedOptimizationsRegionTable *optsRegionTable =
+                    (const IonTrackedOptimizationsRegionTable *) optsRegionTableAddr;
+                const uint8_t *optsTypesTableAddr = trackedOptimizationsMap_ +
+                                                    trackedOptimizationsTypesTableOffset_;
+                const IonTrackedOptimizationsTypesTable *optsTypesTable =
+                    (const IonTrackedOptimizationsTypesTable *) optsTypesTableAddr;
+                const uint8_t *optsAttemptsTableAddr = trackedOptimizationsMap_ +
+                                                       trackedOptimizationsAttemptsTableOffset_;
+                const IonTrackedOptimizationsAttemptsTable *optsAttemptsTable =
+                    (const IonTrackedOptimizationsAttemptsTable *) optsAttemptsTableAddr;
+                entry.initTrackedOptimizations(optsRegionTable, optsTypesTable, optsAttemptsTable,
+                                               allTypes);
+            }
+        }
+
         // Add entry to the global table.
         JitcodeGlobalTable *globalTable = cx->runtime()->jitRuntime()->getJitcodeGlobalTable();
         if (!globalTable->addEntry(entry, cx->runtime())) {
@@ -7348,6 +7395,9 @@ CodeGenerator::link(JSContext *cx, types::CompilerConstraintList *constraints)
         }
     }
 #endif
+
+    // Replace dummy JSObject pointers embedded by LNurseryObject.
+    code->fixupNurseryObjects(cx, gen->nurseryObjects());
 
     // The correct state for prebarriers is unknown until the end of compilation,
     // since a GC can occur during code generation. All barriers are emitted

@@ -2569,8 +2569,7 @@ extern JS_PUBLIC_API(void)
 JS_FireOnNewGlobalObject(JSContext *cx, JS::HandleObject global);
 
 extern JS_PUBLIC_API(JSObject *)
-JS_NewObject(JSContext *cx, const JSClass *clasp, JS::Handle<JSObject*> proto,
-             JS::Handle<JSObject*> parent);
+JS_NewObject(JSContext *cx, const JSClass *clasp, JS::Handle<JSObject*> parent = JS::NullPtr());
 
 /* Queries the [[Extensible]] property of the object. */
 extern JS_PUBLIC_API(bool)
@@ -2583,8 +2582,8 @@ extern JS_PUBLIC_API(JSRuntime *)
 JS_GetObjectRuntime(JSObject *obj);
 
 /*
- * Unlike JS_NewObject, JS_NewObjectWithGivenProto does not compute a default
- * proto if proto's actual parameter value is null.
+ * Unlike JS_NewObject, JS_NewObjectWithGivenProto does not compute a default proto.
+ * If proto is JS::NullPtr, the JS object will have `null` as [[Prototype]].
  */
 extern JS_PUBLIC_API(JSObject *)
 JS_NewObjectWithGivenProto(JSContext *cx, const JSClass *clasp, JS::Handle<JSObject*> proto,
@@ -4557,6 +4556,37 @@ GetWeakMapEntry(JSContext *cx, JS::HandleObject mapObj, JS::HandleObject key,
 extern JS_PUBLIC_API(bool)
 SetWeakMapEntry(JSContext *cx, JS::HandleObject mapObj, JS::HandleObject key,
                 JS::HandleValue val);
+
+/*
+ * Map
+ */
+extern JS_PUBLIC_API(JSObject *)
+NewMapObject(JSContext *cx);
+
+extern JS_PUBLIC_API(uint32_t)
+MapSize(JSContext *cx, HandleObject obj);
+
+extern JS_PUBLIC_API(bool)
+MapGet(JSContext *cx, HandleObject obj,
+       HandleValue key, MutableHandleValue rval);
+
+extern JS_PUBLIC_API(bool)
+MapHas(JSContext *cx, HandleObject obj, HandleValue key, bool *rval);
+
+extern JS_PUBLIC_API(bool)
+MapSet(JSContext *cx, HandleObject obj, HandleValue key, HandleValue val);
+
+extern JS_PUBLIC_API(bool)
+MapClear(JSContext *cx, HandleObject obj);
+
+extern JS_PUBLIC_API(bool)
+MapKeys(JSContext *cx, HandleObject obj, MutableHandleValue rval);
+
+extern JS_PUBLIC_API(bool)
+MapValues(JSContext *cx, HandleObject obj, MutableHandleValue rval);
+
+extern JS_PUBLIC_API(bool)
+MapEntries(JSContext *cx, HandleObject obj, MutableHandleValue rval);
 
 } /* namespace JS */
 

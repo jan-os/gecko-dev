@@ -257,6 +257,13 @@ pref("browser.search.order.1", "chrome://browser/locale/region.properties");
 pref("browser.search.order.2", "chrome://browser/locale/region.properties");
 pref("browser.search.order.3", "chrome://browser/locale/region.properties");
 
+// Market-specific search defaults (US market only)
+pref("browser.search.geoSpecificDefaults", true);
+pref("browser.search.defaultenginename.US", "chrome://browser/locale/region.properties");
+pref("browser.search.order.US.1", "chrome://browser/locale/region.properties");
+pref("browser.search.order.US.2", "chrome://browser/locale/region.properties");
+pref("browser.search.order.US.3", "chrome://browser/locale/region.properties");
+
 // disable updating
 pref("browser.search.update", false);
 
@@ -270,9 +277,6 @@ pref("browser.search.jarURIs", "chrome://browser/locale/searchplugins/");
 
 // tell the search service that we don't really expose the "current engine"
 pref("browser.search.noCurrentEngine", true);
-
-// disable the search service geoIP check
-pref("browser.search.geoip.url", "");
 
 // Control media casting & mirroring features
 pref("browser.casting.enabled", true);
@@ -846,3 +850,8 @@ pref("dom.meta-viewport.enabled", true);
 
 // Enable the OpenH264 plugin support in the addon manager.
 pref("media.gmp-gmpopenh264.provider.enabled", true);
+
+// The default color scheme in reader mode (light, dark, print, auto)
+// auto = color automatically adjusts according to ambient light level
+// (auto only works on platforms where the 'devicelight' event is enabled)
+pref("reader.color_scheme", "auto");

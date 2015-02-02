@@ -2137,6 +2137,18 @@ ContentChild::RecvLastPrivateDocShellDestroyed()
 }
 
 bool
+ContentChild::RecvVolumes(nsTArray<VolumeInfo>&& aVolumes)
+{
+#ifdef MOZ_WIDGET_GONK
+    nsRefPtr<nsVolumeService> vs = nsVolumeService::GetSingleton();
+    if (vs) {
+        vs->RecvVolumesFromParent(aVolumes);
+    }
+#endif
+    return true;
+}
+
+bool
 ContentChild::RecvFilePathUpdate(const nsString& aStorageType,
                                  const nsString& aStorageName,
                                  const nsString& aPath,
@@ -2484,7 +2496,10 @@ ContentChild::RecvGetProfile(nsCString* aProfile)
 bool
 ContentChild::RecvLoadPluginResult(const uint32_t& aPluginId, const bool& aResult)
 {
-    bool finalResult = aResult && SendConnectPluginBridge(aPluginId);
+    nsresult rv;
+    bool finalResult = aResult &&
+                       SendConnectPluginBridge(aPluginId, &rv) &&
+                       NS_SUCCEEDED(rv);
     plugins::PluginModuleContentParent::OnLoadPluginResult(aPluginId,
                                                            finalResult);
     return true;
@@ -2522,6 +2537,41 @@ ContentChild::GetBrowserOrId(TabChild* aTabChild)
     else {
         return PBrowserOrId(aTabChild->GetTabId());
     }
+}
+
+// This code goes here rather than nsGlobalWindow.cpp because nsGlobalWindow.cpp
+// can't include ContentChild.h since it includes windows.h.
+
+static uint64_t gNextWindowID = 0;
+
+// We use only 53 bits for the window ID so that it can be converted to and from
+// a JS value without loss of precision. The upper bits of the window ID hold the
+// process ID. The lower bits identify the window.
+static const uint64_t kWindowIDTotalBits = 53;
+static const uint64_t kWindowIDProcessBits = 22;
+static const uint64_t kWindowIDWindowBits = kWindowIDTotalBits - kWindowIDProcessBits;
+
+// Try to return a window ID that is unique across processes and that will never
+// be recycled.
+uint64_t
+NextWindowID()
+{
+  uint64_t processID = 0;
+  if (XRE_GetProcessType() == GeckoProcessType_Content) {
+    ContentChild* cc = ContentChild::GetSingleton();
+    processID = cc->GetID();
+  }
+
+  MOZ_RELEASE_ASSERT(processID < (uint64_t(1) << kWindowIDProcessBits));
+  uint64_t processBits = processID & ((uint64_t(1) << kWindowIDProcessBits) - 1);
+
+  // Make sure no actual window ends up with mWindowID == 0.
+  uint64_t windowID = ++gNextWindowID;
+
+  MOZ_RELEASE_ASSERT(windowID < (uint64_t(1) << kWindowIDWindowBits));
+  uint64_t windowBits = windowID & ((uint64_t(1) << kWindowIDWindowBits) - 1);
+
+  return (processBits << kWindowIDWindowBits) | windowBits;
 }
 
 } // namespace dom

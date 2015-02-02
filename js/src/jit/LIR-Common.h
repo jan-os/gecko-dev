@@ -108,6 +108,11 @@ class LMoveGroup : public LInstructionHelper<0, 0, 0>
 {
     js::Vector<LMove, 2, JitAllocPolicy> moves_;
 
+#ifdef JS_CODEGEN_X86
+    // Optional general register available for use when executing moves.
+    LAllocation scratchRegister_;
+#endif
+
     explicit LMoveGroup(TempAllocator &alloc)
       : moves_(alloc)
     { }
@@ -132,6 +137,19 @@ class LMoveGroup : public LInstructionHelper<0, 0, 0>
     }
     const LMove &getMove(size_t i) const {
         return moves_[i];
+    }
+
+#ifdef JS_CODEGEN_X86
+    void setScratchRegister(Register reg) {
+        scratchRegister_ = LGeneralReg(reg);
+    }
+#endif
+    LAllocation maybeScratchRegister() {
+#ifdef JS_CODEGEN_X86
+        return scratchRegister_;
+#else
+        return LAllocation();
+#endif
     }
 };
 
@@ -662,6 +680,16 @@ class LValue : public LInstructionHelper<BOX_PIECES, 0, 0>
 
     Value value() const {
         return v_;
+    }
+};
+
+class LNurseryObject : public LInstructionHelper<1, 0, 0>
+{
+  public:
+    LIR_HEADER(NurseryObject);
+
+    MNurseryObject *mir() const {
+        return mir_->toNurseryObject();
     }
 };
 

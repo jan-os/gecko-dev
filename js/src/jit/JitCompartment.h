@@ -235,6 +235,8 @@ class JitRuntime
     // Global table of jitcode native address => bytecode address mappings.
     JitcodeGlobalTable *jitcodeGlobalTable_;
 
+    bool hasIonNurseryObjects_;
+
   private:
     JitCode *generateLazyLinkStub(JSContext *cx);
     JitCode *generateProfilerExitFrameTailStub(JSContext *cx);
@@ -390,6 +392,13 @@ class JitRuntime
         ionReturnOverride_ = v;
     }
 
+    bool hasIonNurseryObjects() const {
+        return hasIonNurseryObjects_;
+    }
+    void setHasIonNurseryObjects(bool b)  {
+        hasIonNurseryObjects_ = b;
+    }
+
     bool hasJitcodeGlobalTable() const {
         return jitcodeGlobalTable_ != nullptr;
     }
@@ -401,6 +410,10 @@ class JitRuntime
 
     bool isProfilerInstrumentationEnabled(JSRuntime *rt) {
         return rt->spsProfiler.enabled();
+    }
+
+    bool isOptimizationTrackingEnabled(JSRuntime *rt) {
+        return isProfilerInstrumentationEnabled(rt);
     }
 };
 

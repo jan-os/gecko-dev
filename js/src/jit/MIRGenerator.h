@@ -87,6 +87,10 @@ class MIRGenerator
         return !compilingAsmJS() && instrumentedProfiling();
     }
 
+    bool isOptimizationTrackingEnabled() {
+        return isProfilerInstrumentationEnabled() && !info().isAnalysis();
+    }
+
     // Whether the main thread is trying to cancel this build.
     bool shouldCancel(const char *why) {
         maybePause();
@@ -189,6 +193,12 @@ class MIRGenerator
     bool instrumentedProfiling_;
     bool instrumentedProfilingIsCached_;
 
+    // List of nursery objects used by this compilation. Can be traced by a
+    // minor GC while compilation happens off-thread. This Vector should only
+    // be accessed on the main thread (IonBuilder, nursery GC or
+    // CodeGenerator::link).
+    ObjectVector nurseryObjects_;
+
     void addAbortedNewScriptPropertiesType(types::TypeObject *type);
     void setForceAbort() {
         shouldForceAbort_ = true;
@@ -206,6 +216,12 @@ class MIRGenerator
 
   public:
     const JitCompileOptions options;
+
+    void traceNurseryObjects(JSTracer *trc);
+
+    const ObjectVector &nurseryObjects() const {
+        return nurseryObjects_;
+    }
 };
 
 } // namespace jit

@@ -41,7 +41,12 @@ let snapshotFormatters = {
     if (data.vendor)
       version += " (" + data.vendor + ")";
     $("version-box").textContent = version;
-    $("multiprocess-box").textContent = data.numRemoteWindows + "/" + data.numTotalWindows;
+    $("buildid-box").textContent = data.buildID;
+    if (data.updateChannel)
+      $("updatechannel-box").textContent = data.updateChannel;
+
+    $("multiprocess-box").textContent = stringBundle().formatStringFromName("multiProcessStatus",
+      [data.numRemoteWindows, data.numTotalWindows, data.remoteAutoStart], 3);
   },
 
 #ifdef MOZ_CRASHREPORTER
@@ -341,7 +346,7 @@ let snapshotFormatters = {
     const keys = ["hasSeccompBPF", "canSandboxContent", "canSandboxMedia"];
     let strings = stringBundle();
     let tbody = $("sandbox-tbody");
-    for (key of keys) {
+    for (let key of keys) {
       if (key in data) {
 	tbody.appendChild($.new("tr", [
 	  $.new("th", strings.GetStringFromName(key), "column"),

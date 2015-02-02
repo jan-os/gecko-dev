@@ -152,7 +152,10 @@ BufObject.prototype = {
    *        original main thread message object that led to the RIL request.
    */
   newParcel: function(type, options) {
-    if (DEBUG) this.context.debug("New outgoing parcel of type " + type);
+    if (DEBUG) {
+      this.context.debug("New outgoing parcel of type " + type +
+                         ", token " + this.mToken);
+    }
 
     // We're going to leave room for the parcel size at the beginning.
     this.outgoingIndex = this.PARCEL_SIZE_SIZE;
@@ -10736,7 +10739,12 @@ ICCPDUHelperObject.prototype = {
     let numLen = this.context.GsmPDUHelper.readHexOctet();
     if (numLen != 0xff) {
       if (numLen > ADN_MAX_BCD_NUMBER_BYTES) {
-        throw new Error("invalid length of BCD number/SSC contents - " + numLen);
+        if (DEBUG) {
+          this.context.debug(
+            "Error: invalid length of BCD number/SSC contents - " + numLen);
+        }
+        Buf.seekIncoming(ADN_MAX_BCD_NUMBER_BYTES * Buf.PDU_HEX_OCTET_SIZE);
+        return "";
       }
 
       number = this.readDiallingNumber(numLen);
@@ -10955,8 +10963,10 @@ StkCommandParamsFactoryObject.prototype = {
       menu.defaultItem = ctlv.value.identifier - 1;
     }
 
-    // The 1st bit and 2nd bit determines the presentation type.
-    menu.presentationType = cmdDetails.commandQualifier & 0x03;
+    if (cmdDetails.typeOfCommand == STK_CMD_SELECT_ITEM) {
+      // The 1st bit and 2nd bit determines the presentation type.
+      menu.presentationType = cmdDetails.commandQualifier & 0x03;
+    }
 
     // Help information available.
     if (cmdDetails.commandQualifier & 0x80) {
