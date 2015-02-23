@@ -310,6 +310,9 @@ MapCertErrorToProbeValue(PRErrorCode errorCode)
     case mozilla::pkix::MOZILLA_PKIX_ERROR_CA_CERT_USED_AS_END_ENTITY: return 11;
     case mozilla::pkix::MOZILLA_PKIX_ERROR_V1_CERT_USED_AS_CA: return 12;
     case mozilla::pkix::MOZILLA_PKIX_ERROR_INADEQUATE_KEY_SIZE: return 13;
+    case mozilla::pkix::MOZILLA_PKIX_ERROR_NOT_YET_VALID_CERTIFICATE: return 14;
+    case mozilla::pkix::MOZILLA_PKIX_ERROR_NOT_YET_VALID_ISSUER_CERTIFICATE:
+      return 15;
   }
   NS_WARNING("Unknown certificate error code. Does MapCertErrorToProbeValue "
              "handle everything in DetermineCertOverrideErrors?");
@@ -341,25 +344,34 @@ DetermineCertOverrideErrors(CERTCertificate* cert, const char* hostName,
     case mozilla::pkix::MOZILLA_PKIX_ERROR_CA_CERT_USED_AS_END_ENTITY:
     case mozilla::pkix::MOZILLA_PKIX_ERROR_INADEQUATE_KEY_SIZE:
     case mozilla::pkix::MOZILLA_PKIX_ERROR_V1_CERT_USED_AS_CA:
+    case mozilla::pkix::MOZILLA_PKIX_ERROR_NOT_YET_VALID_ISSUER_CERTIFICATE:
     {
       collectedErrors = nsICertOverrideService::ERROR_UNTRUSTED;
       errorCodeTrust = defaultErrorCodeToReport;
 
       SECCertTimeValidity validity = CERT_CheckCertValidTimes(cert, now, false);
       if (validity == secCertTimeUndetermined) {
-        PR_SetError(defaultErrorCodeToReport, 0);
+        // This only happens if cert is null. CERT_CheckCertValidTimes will
+        // have set the error code to SEC_ERROR_INVALID_ARGS. We should really
+        // be using mozilla::pkix here anyway.
+        MOZ_ASSERT(PR_GetError() == SEC_ERROR_INVALID_ARGS);
         return SECFailure;
       }
-      if (validity != secCertTimeValid) {
+      if (validity == secCertTimeExpired) {
         collectedErrors |= nsICertOverrideService::ERROR_TIME;
         errorCodeExpired = SEC_ERROR_EXPIRED_CERTIFICATE;
+      } else if (validity == secCertTimeNotValidYet) {
+        collectedErrors |= nsICertOverrideService::ERROR_TIME;
+        errorCodeExpired =
+          mozilla::pkix::MOZILLA_PKIX_ERROR_NOT_YET_VALID_CERTIFICATE;
       }
       break;
     }
 
     case SEC_ERROR_EXPIRED_CERTIFICATE:
+    case mozilla::pkix::MOZILLA_PKIX_ERROR_NOT_YET_VALID_CERTIFICATE:
       collectedErrors = nsICertOverrideService::ERROR_TIME;
-      errorCodeExpired = SEC_ERROR_EXPIRED_CERTIFICATE;
+      errorCodeExpired = defaultErrorCodeToReport;
       break;
 
     case SSL_ERROR_BAD_CERT_DOMAIN:
@@ -395,7 +407,7 @@ DetermineCertOverrideErrors(CERTCertificate* cert, const char* hostName,
       collectedErrors |= nsICertOverrideService::ERROR_MISMATCH;
       errorCodeMismatch = SSL_ERROR_BAD_CERT_DOMAIN;
     } else if (result != Success) {
-      PR_SetError(defaultErrorCodeToReport, 0);
+      PR_SetError(MapResultToPRErrorCode(result), 0);
       return SECFailure;
     }
   }
@@ -584,6 +596,13 @@ CreateCertErrorRunnable(CertVerifier& certVerifier,
                                   defaultErrorCodeToReport, collected_errors,
                                   errorCodeTrust, errorCodeMismatch,
                                   errorCodeExpired) != SECSuccess) {
+    // Attempt to enforce that if DetermineCertOverrideErrors failed,
+    // PR_SetError was set with a non-overridable error. This is because if we
+    // return from CreateCertErrorRunnable without calling
+    // infoObject->SetStatusErrorBits, we won't have the required information
+    // to actually add a certificate error override. This results in a broken
+    // UI which is annoying but not a security disaster.
+    MOZ_ASSERT(!ErrorIsOverridable(PR_GetError()));
     return nullptr;
   }
 

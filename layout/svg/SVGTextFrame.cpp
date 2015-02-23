@@ -1286,12 +1286,8 @@ struct TextNodeCorrespondence
   uint32_t mUndisplayedCharacters;
 };
 
-static void DestroyTextNodeCorrespondence(void* aPropertyValue)
-{
-  delete static_cast<TextNodeCorrespondence*>(aPropertyValue);
-}
-
-NS_DECLARE_FRAME_PROPERTY(TextNodeCorrespondenceProperty, DestroyTextNodeCorrespondence)
+NS_DECLARE_FRAME_PROPERTY(TextNodeCorrespondenceProperty,
+                          DeleteValue<TextNodeCorrespondence>)
 
 /**
  * Returns the number of undisplayed characters before the specified
@@ -2740,9 +2736,8 @@ private:
   void SetupContext();
 
   bool IsClipPathChild() const {
-    // parent is the CSS text frame, grand parent must be
-    // an SVG frame of some kind
-    return mFrame->GetParent()->GetParent()->GetStateBits() &
+    return nsLayoutUtils::GetClosestFrameOfType
+             (mFrame->GetParent(), nsGkAtoms::svgTextFrame)->GetStateBits() &
              NS_STATE_SVG_CLIPPATH_CHILD;
   }
 
@@ -3125,7 +3120,7 @@ public:
       mDisableSubpixelAA(false)
   {
     MOZ_COUNT_CTOR(nsDisplaySVGText);
-    NS_ABORT_IF_FALSE(aFrame, "Must have a frame!");
+    MOZ_ASSERT(aFrame, "Must have a frame!");
   }
 #ifdef NS_BUILD_REFCNT_LOGGING
   virtual ~nsDisplaySVGText() {
@@ -3517,8 +3512,8 @@ SVGTextFrame::FindCloserFrameForSelection(
 void
 SVGTextFrame::NotifySVGChanged(uint32_t aFlags)
 {
-  NS_ABORT_IF_FALSE(aFlags & (TRANSFORM_CHANGED | COORD_CONTEXT_CHANGED),
-                    "Invalidation logic may need adjusting");
+  MOZ_ASSERT(aFlags & (TRANSFORM_CHANGED | COORD_CONTEXT_CHANGED),
+             "Invalidation logic may need adjusting");
 
   bool needNewBounds = false;
   bool needGlyphMetricsUpdate = false;
@@ -3836,8 +3831,8 @@ SVGTextFrame::ReflowSVG()
   NS_ASSERTION(nsSVGUtils::OuterSVGIsCallingReflowSVG(this),
                "This call is probaby a wasteful mistake");
 
-  NS_ABORT_IF_FALSE(!(GetStateBits() & NS_FRAME_IS_NONDISPLAY),
-                    "ReflowSVG mechanism not designed for this");
+  MOZ_ASSERT(!(GetStateBits() & NS_FRAME_IS_NONDISPLAY),
+             "ReflowSVG mechanism not designed for this");
 
   if (!nsSVGUtils::NeedsReflowSVG(this)) {
     NS_ASSERTION(!(mState & NS_STATE_SVG_POSITIONING_DIRTY), "How did this happen?");

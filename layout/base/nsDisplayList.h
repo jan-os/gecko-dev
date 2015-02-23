@@ -340,16 +340,15 @@ public:
   {
     return (gfxPrefs::LayoutEventRegionsEnabled() && mMode == PAINTING);
   }
-
-  bool GetAncestorHasTouchEventHandler() { return mAncestorHasTouchEventHandler; }
-  void SetAncestorHasTouchEventHandler(bool aValue)
+  bool IsInsidePointerEventsNoneDoc()
   {
-    mAncestorHasTouchEventHandler = aValue;
+    return CurrentPresShellState()->mInsidePointerEventsNoneDoc;
   }
-  bool GetAncestorHasScrollEventHandler() { return mAncestorHasScrollEventHandler; }
-  void SetAncestorHasScrollEventHandler(bool aValue)
+
+  bool GetAncestorHasApzAwareEventHandler() { return mAncestorHasApzAwareEventHandler; }
+  void SetAncestorHasApzAwareEventHandler(bool aValue)
   {
-    mAncestorHasScrollEventHandler = aValue;
+    mAncestorHasApzAwareEventHandler = aValue;
   }
 
   bool HaveScrollableDisplayPort() const { return mHaveScrollableDisplayPort; }
@@ -391,8 +390,11 @@ public:
   /**
    * Notify the display list builder that we're entering a presshell.
    * aReferenceFrame should be a frame in the new presshell.
+   * aPointerEventsNoneDoc should be set to true if the frame generating this
+   * document is pointer-events:none without mozpasspointerevents.
    */
-  void EnterPresShell(nsIFrame* aReferenceFrame);
+  void EnterPresShell(nsIFrame* aReferenceFrame,
+                      bool aPointerEventsNoneDoc = false);
   /**
    * For print-preview documents, we sometimes need to build display items for
    * the same frames multiple times in the same presentation, with different
@@ -422,6 +424,16 @@ public:
    * nested presshell.
    */
   bool IsInSubdocument() { return mPresShellStates.Length() > 1; }
+
+  /**
+   * Return true if we're currently building a display list for the root
+   * presshell which is the presshell of a chrome document, or if we're
+   * building the display list for a popup and have not entered a subdocument
+   * inside that popup.
+   */
+  bool IsInRootChromeDocumentOrPopup() {
+    return (mIsInChromePresContext || mIsBuildingForPopup) && !IsInSubdocument();
+  }
 
   /**
    * @return true if images have been set to decode synchronously.
@@ -561,8 +573,7 @@ public:
         mPrevOffset(aBuilder->mCurrentOffsetToReferenceFrame),
         mPrevDirtyRect(aBuilder->mDirtyRect),
         mPrevIsAtRootOfPseudoStackingContext(aBuilder->mIsAtRootOfPseudoStackingContext),
-        mPrevAncestorHasTouchEventHandler(aBuilder->mAncestorHasTouchEventHandler),
-        mPrevAncestorHasScrollEventHandler(aBuilder->mAncestorHasScrollEventHandler)
+        mPrevAncestorHasApzAwareEventHandler(aBuilder->mAncestorHasApzAwareEventHandler)
     {
       if (aForChild->IsTransformed()) {
         aBuilder->mCurrentOffsetToReferenceFrame = nsPoint();
@@ -607,8 +618,7 @@ public:
       mBuilder->mCurrentOffsetToReferenceFrame = mPrevOffset;
       mBuilder->mDirtyRect = mPrevDirtyRect;
       mBuilder->mIsAtRootOfPseudoStackingContext = mPrevIsAtRootOfPseudoStackingContext;
-      mBuilder->mAncestorHasTouchEventHandler = mPrevAncestorHasTouchEventHandler;
-      mBuilder->mAncestorHasScrollEventHandler = mPrevAncestorHasScrollEventHandler;
+      mBuilder->mAncestorHasApzAwareEventHandler = mPrevAncestorHasApzAwareEventHandler;
       mBuilder->mCurrentAnimatedGeometryRoot = mPrevAnimatedGeometryRoot;
     }
   private:
@@ -620,8 +630,7 @@ public:
     nsPoint               mPrevOffset;
     nsRect                mPrevDirtyRect;
     bool                  mPrevIsAtRootOfPseudoStackingContext;
-    bool                  mPrevAncestorHasTouchEventHandler;
-    bool                  mPrevAncestorHasScrollEventHandler;
+    bool                  mPrevAncestorHasApzAwareEventHandler;
   };
 
   /**
@@ -701,13 +710,10 @@ public:
     DisplayItemClip mContainingBlockClip;
     nsRect mDirtyRect;
   };
-  static void DestroyOutOfFlowDisplayData(void* aPropertyValue)
-  {
-    delete static_cast<OutOfFlowDisplayData*>(aPropertyValue);
-  }
 
-  NS_DECLARE_FRAME_PROPERTY(OutOfFlowDisplayDataProperty, DestroyOutOfFlowDisplayData)
-  NS_DECLARE_FRAME_PROPERTY(Preserve3DDirtyRectProperty, nsIFrame::DestroyRect)
+  NS_DECLARE_FRAME_PROPERTY(OutOfFlowDisplayDataProperty,
+                            DeleteValue<OutOfFlowDisplayData>)
+  NS_DECLARE_FRAME_PROPERTY(Preserve3DDirtyRectProperty, DeleteValue<nsRect>)
 
   nsPresContext* CurrentPresContext() {
     return CurrentPresShellState()->mPresShell->GetPresContext();
@@ -809,6 +815,10 @@ private:
     nsRect        mCaretRect;
     uint32_t      mFirstFrameMarkedForDisplay;
     bool          mIsBackgroundOnly;
+    // This is a per-document flag turning off event handling for all content
+    // in the document, and is set when we enter a subdocument for a pointer-
+    // events:none frame that doesn't have mozpasspointerevents set.
+    bool          mInsidePointerEventsNoneDoc;
   };
 
   PresShellState* CurrentPresShellState() {
@@ -897,16 +907,18 @@ private:
   // True when we're building a display list that's directly or indirectly
   // under an nsDisplayTransform
   bool                           mInTransform;
+  bool                           mIsInChromePresContext;
   bool                           mSyncDecodeImages;
   bool                           mIsPaintingToWindow;
   bool                           mIsCompositingCheap;
   bool                           mContainsPluginItem;
-  bool                           mAncestorHasTouchEventHandler;
-  bool                           mAncestorHasScrollEventHandler;
+  bool                           mAncestorHasApzAwareEventHandler;
   // True when the first async-scrollable scroll frame for which we build a
   // display list has a display port. An async-scrollable scroll frame is one
   // which WantsAsyncScroll().
   bool                           mHaveScrollableDisplayPort;
+  bool                           mWindowDraggingAllowed;
+  bool                           mIsBuildingForPopup;
 };
 
 class nsDisplayItem;
@@ -1144,16 +1156,6 @@ public:
       }
     }
   }
-
-  /**
-   * For display items types that just draw a background we use this function
-   * to do any invalidation that might be needed if we are asked to sync decode
-   * images.
-   */
-  void AddInvalidRegionForSyncDecodeBackgroundImages(
-    nsDisplayListBuilder* aBuilder,
-    const nsDisplayItemGeometry* aGeometry,
-    nsRegion* aInvalidRegion);
 
   /**
    * Called when the area rendered by this display item has changed (been
@@ -2626,6 +2628,11 @@ public:
   virtual nsRect GetBounds(nsDisplayListBuilder* aBuilder, bool* aSnap) MOZ_OVERRIDE
   {
     *aSnap = false;
+    return nsRect();
+  }
+  nsRect GetHitRegionBounds(nsDisplayListBuilder* aBuilder, bool* aSnap)
+  {
+    *aSnap = false;
     return mHitRegion.GetBounds().Union(mMaybeHitRegion.GetBounds());
   }
 
@@ -3034,6 +3041,7 @@ public:
 
 protected:
   ViewID mScrollParentId;
+  bool mForceDispatchToContentRegion;
 };
 
 /**
@@ -3167,6 +3175,7 @@ public:
 
   static FrameMetrics ComputeFrameMetrics(nsIFrame* aForFrame,
                                           nsIFrame* aScrollFrame,
+                                          nsIContent* aContent,
                                           const nsIFrame* aReferenceFrame,
                                           Layer* aLayer,
                                           ViewID aScrollParentId,

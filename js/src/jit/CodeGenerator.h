@@ -56,7 +56,7 @@ class CodeGenerator : public CodeGeneratorSpecific
   public:
     bool generate();
     bool generateAsmJS(AsmJSFunctionLabels *labels);
-    bool link(JSContext *cx, types::CompilerConstraintList *constraints);
+    bool link(JSContext *cx, CompilerConstraintList *constraints);
 
     void visitLabel(LLabel *lir);
     void visitNop(LNop *lir);
@@ -92,7 +92,7 @@ class CodeGenerator : public CodeGeneratorSpecific
     void visitTestOAndBranch(LTestOAndBranch *lir);
     void visitTestVAndBranch(LTestVAndBranch *lir);
     void visitFunctionDispatch(LFunctionDispatch *lir);
-    void visitTypeObjectDispatch(LTypeObjectDispatch *lir);
+    void visitObjectGroupDispatch(LObjectGroupDispatch *lir);
     void visitBooleanToString(LBooleanToString *lir);
     void emitIntToString(Register input, Register output, Label *ool);
     void visitIntToString(LIntToString *lir);
@@ -221,10 +221,10 @@ class CodeGenerator : public CodeGeneratorSpecific
     void visitCompareS(LCompareS *lir);
     void visitCompareStrictS(LCompareStrictS *lir);
     void visitCompareVM(LCompareVM *lir);
-    void visitIsNullOrLikeUndefined(LIsNullOrLikeUndefined *lir);
-    void visitIsNullOrLikeUndefinedAndBranch(LIsNullOrLikeUndefinedAndBranch *lir);
-    void visitEmulatesUndefined(LEmulatesUndefined *lir);
-    void visitEmulatesUndefinedAndBranch(LEmulatesUndefinedAndBranch *lir);
+    void visitIsNullOrLikeUndefinedV(LIsNullOrLikeUndefinedV *lir);
+    void visitIsNullOrLikeUndefinedT(LIsNullOrLikeUndefinedT *lir);
+    void visitIsNullOrLikeUndefinedAndBranchV(LIsNullOrLikeUndefinedAndBranchV *lir);
+    void visitIsNullOrLikeUndefinedAndBranchT(LIsNullOrLikeUndefinedAndBranchT *lir);
     void emitConcat(LInstruction *lir, Register lhs, Register rhs, Register output);
     void visitConcat(LConcat *lir);
     void visitCharCodeAt(LCharCodeAt *lir);
@@ -245,6 +245,7 @@ class CodeGenerator : public CodeGeneratorSpecific
     void visitLoadElementHole(LLoadElementHole *lir);
     void visitLoadUnboxedPointerV(LLoadUnboxedPointerV *lir);
     void visitLoadUnboxedPointerT(LLoadUnboxedPointerT *lir);
+    void visitUnboxObjectOrNull(LUnboxObjectOrNull *lir);
     void visitStoreElementT(LStoreElementT *lir);
     void visitStoreElementV(LStoreElementV *lir);
     void visitStoreElementHoleT(LStoreElementHoleT *lir);
@@ -340,7 +341,6 @@ class CodeGenerator : public CodeGeneratorSpecific
     void visitSetPropertyCacheV(LSetPropertyCacheV *ins);
     void visitSetPropertyCacheT(LSetPropertyCacheT *ins);
     void visitGetNameCache(LGetNameCache *ins);
-    void visitCallsiteCloneCache(LCallsiteCloneCache *ins);
 
     void visitGetPropertyIC(OutOfLineUpdateCache *ool, DataPtr<GetPropertyIC> &ic);
     void visitSetPropertyIC(OutOfLineUpdateCache *ool, DataPtr<SetPropertyIC> &ic);
@@ -348,7 +348,6 @@ class CodeGenerator : public CodeGeneratorSpecific
     void visitSetElementIC(OutOfLineUpdateCache *ool, DataPtr<SetElementIC> &ic);
     void visitBindNameIC(OutOfLineUpdateCache *ool, DataPtr<BindNameIC> &ic);
     void visitNameIC(OutOfLineUpdateCache *ool, DataPtr<NameIC> &ic);
-    void visitCallsiteCloneIC(OutOfLineUpdateCache *ool, DataPtr<CallsiteCloneIC> &ic);
 
     void visitAssertRangeI(LAssertRangeI *ins);
     void visitAssertRangeD(LAssertRangeD *ins);

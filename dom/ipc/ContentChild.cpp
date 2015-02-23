@@ -91,6 +91,7 @@
 #include "nsAnonymousTemporaryFile.h"
 #include "nsISpellChecker.h"
 #include "nsClipboardProxy.h"
+#include "nsISystemMessageCache.h"
 
 #include "IHistory.h"
 #include "nsNetUtil.h"
@@ -529,6 +530,10 @@ InitOnContentProcessCreated()
     }
     PostForkPreload();
 #endif
+
+    nsCOMPtr<nsISystemMessageCache> smc =
+        do_GetService("@mozilla.org/system-message-cache;1");
+    NS_WARN_IF(!smc);
 
     // This will register cross-process observer.
     mozilla::dom::time::InitializeDateCacheCleaner();
@@ -1805,28 +1810,36 @@ ContentChild::ActorDestroy(ActorDestroyReason why)
 }
 
 void
-ContentChild::ProcessingError(Result what)
+ContentChild::ProcessingError(Result aCode, const char* aReason)
 {
-    switch (what) {
-    case MsgDropped:
-        NS_WARNING("MsgDropped in ContentChild");
-        return;
-    case MsgNotKnown:
-        NS_RUNTIMEABORT("aborting because of MsgNotKnown");
-    case MsgNotAllowed:
-        NS_RUNTIMEABORT("aborting because of MsgNotAllowed");
-    case MsgPayloadError:
-        NS_RUNTIMEABORT("aborting because of MsgPayloadError");
-    case MsgProcessingError:
-        NS_RUNTIMEABORT("aborting because of MsgProcessingError");
-    case MsgRouteError:
-        NS_RUNTIMEABORT("aborting because of MsgRouteError");
-    case MsgValueError:
-        NS_RUNTIMEABORT("aborting because of MsgValueError");
+    switch (aCode) {
+        case MsgDropped:
+            NS_WARNING("MsgDropped in ContentChild");
+            return;
 
-    default:
-        NS_RUNTIMEABORT("not reached");
+        case MsgNotKnown:
+        case MsgNotAllowed:
+        case MsgPayloadError:
+        case MsgProcessingError:
+        case MsgRouteError:
+        case MsgValueError:
+            break;
+
+        default:
+            NS_RUNTIMEABORT("not reached");
     }
+
+#if defined(MOZ_CRASHREPORTER) && !defined(MOZ_B2G)
+    if (ManagedPCrashReporterChild().Length() > 0) {
+        CrashReporterChild* crashReporter =
+            static_cast<CrashReporterChild*>(ManagedPCrashReporterChild()[0]);
+            nsDependentCString reason(aReason);
+            crashReporter->SendAnnotateCrashReport(
+                NS_LITERAL_CSTRING("ipc_channel_error"),
+                reason);
+    }
+#endif
+    NS_RUNTIMEABORT("Content child abort due to IPC error");
 }
 
 void
@@ -1956,8 +1969,8 @@ ContentChild::RecvAddPermission(const IPC::Permission& permission)
         services::GetPermissionManager();
     nsPermissionManager* permissionManager =
         static_cast<nsPermissionManager*>(permissionManagerIface.get());
-    NS_ABORT_IF_FALSE(permissionManager,
-                     "We have no permissionManager in the Content process !");
+    MOZ_ASSERT(permissionManager,
+               "We have no permissionManager in the Content process !");
 
     nsCOMPtr<nsIURI> uri;
     NS_NewURI(getter_AddRefs(uri), NS_LITERAL_CSTRING("http://") + nsCString(permission.host));

@@ -17,10 +17,11 @@
 #include "mozilla/CDMCaps.h"
 
 class nsPIDOMWindow;
-class ArrayBufferViewOrArrayBuffer;
 
 namespace mozilla {
 namespace dom {
+
+class ArrayBufferViewOrArrayBuffer;
 
 class MediaKeyStatusMap MOZ_FINAL : public nsISupports,
                                     public nsWrapperCache
@@ -30,7 +31,9 @@ public:
   NS_DECL_CYCLE_COLLECTION_SCRIPT_HOLDER_CLASS(MediaKeyStatusMap)
 
 public:
-  explicit MediaKeyStatusMap(nsPIDOMWindow* aParent);
+  explicit MediaKeyStatusMap(JSContext* aCx,
+                             nsPIDOMWindow* aParent,
+                             ErrorResult& aRv);
 
 protected:
   ~MediaKeyStatusMap();

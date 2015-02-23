@@ -472,8 +472,9 @@ public:
 
   mozilla::WritingMode GetWritingMode(void) const
   {
-    NS_ASSERTION(message == NS_QUERY_SELECTED_TEXT,
-                 "not querying selection");
+    NS_ASSERTION(message == NS_QUERY_SELECTED_TEXT ||
+                 message == NS_QUERY_TEXT_RECT,
+                 "not querying selection or text rect");
     return mReply.mWritingMode;
   }
 
@@ -492,7 +493,7 @@ public:
     uint32_t mOffset;
     nsString mString;
     // Finally, the coordinates is system coordinates.
-    nsIntRect mRect;
+    mozilla::LayoutDeviceIntRect mRect;
     // The return widget has the caret. This is set at all query events.
     nsIWidget* mFocusedWidget;
     // true if selection is reversed (end < start)

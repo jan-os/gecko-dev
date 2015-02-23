@@ -1381,13 +1381,8 @@ nsPluginInstanceOwner::GetImageContainerForVideo(nsNPAPIPluginInstance::VideoInf
   nsRefPtr<Image> img = container->CreateImage(ImageFormat::SURFACE_TEXTURE);
 
   SurfaceTextureImage::Data data;
-
   data.mSurfTex = aVideoInfo->mSurfaceTexture;
-
-  // The logic below for Honeycomb is just a guess, but seems to work. We don't have a separate
-  // inverted flag for video.
-  data.mOriginPos = AndroidBridge::Bridge()->IsHoneycomb() ? gl::OriginPos::BottomLeft
-                                                           : mInstance->OriginPos();
+  data.mOriginPos = gl::OriginPos::BottomLeft;
   data.mSize = gfx::IntSize(aVideoInfo->mDimensions.width, aVideoInfo->mDimensions.height);
 
   SurfaceTextureImage* typedImg = static_cast<SurfaceTextureImage*>(img.get());
@@ -2121,8 +2116,7 @@ nsEventStatus nsPluginInstanceOwner::ProcessEvent(const WidgetGUIEvent& anEvent)
         // Get reference point relative to screen:
         LayoutDeviceIntPoint rootPoint(-1, -1);
         if (widget)
-          rootPoint = anEvent.refPoint +
-            LayoutDeviceIntPoint::FromUntyped(widget->WidgetToScreenOffset());
+          rootPoint = anEvent.refPoint + widget->WidgetToScreenOffset();
 #ifdef MOZ_WIDGET_GTK
         Window root = GDK_ROOT_WINDOW();
 #elif defined(MOZ_WIDGET_QT)
@@ -2878,7 +2872,10 @@ NS_IMETHODIMP nsPluginInstanceOwner::CreateWidget(void)
             dom::TabChild* tc = dom::TabChild::GetFrom(topWindow);
             if (tc) {
               // This returns a PluginWidgetProxy which remotes a number of calls.
-              mWidget = tc->CreatePluginWidget(parentWidget.get());
+              rv = tc->CreatePluginWidget(parentWidget.get(), getter_AddRefs(mWidget));
+              if (NS_FAILED(rv)) {
+                return rv;
+              }
             }
           }
         }
@@ -2894,7 +2891,7 @@ NS_IMETHODIMP nsPluginInstanceOwner::CreateWidget(void)
       initData.clipChildren = true;
       initData.clipSiblings = true;
       rv = mWidget->Create(parentWidget.get(), nullptr, nsIntRect(0,0,0,0),
-                           nullptr, &initData);
+                           &initData);
       if (NS_FAILED(rv)) {
         mWidget->Destroy();
         mWidget = nullptr;

@@ -91,9 +91,8 @@ static nsRefPtr<GLContext> sPluginContext = nullptr;
 static bool EnsureGLContext()
 {
   if (!sPluginContext) {
-    gfxIntSize dummySize(16, 16);
-    sPluginContext = GLContextProvider::CreateOffscreen(dummySize,
-                                                        SurfaceCaps::Any());
+    bool requireCompatProfile = true;
+    sPluginContext = GLContextProvider::CreateHeadless(requireCompatProfile);
   }
 
   return sPluginContext != nullptr;
@@ -928,7 +927,7 @@ void nsNPAPIPluginInstance::SetWakeLock(bool aLocked)
     return;
 
   mWakeLocked = aLocked;
-  hal::ModifyWakeLock(NS_LITERAL_STRING("nsNPAPIPluginInstance"),
+  hal::ModifyWakeLock(NS_LITERAL_STRING("screen"),
                       mWakeLocked ? hal::WAKE_LOCK_ADD_ONE : hal::WAKE_LOCK_REMOVE_ONE,
                       hal::WAKE_LOCK_NO_CHANGE);
 }

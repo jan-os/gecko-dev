@@ -209,6 +209,17 @@ nsHostRecord::SetExpiration(const mozilla::TimeStamp& now, unsigned int valid, u
     mValidEnd = now + TimeDuration::FromSeconds(valid + grace);
 }
 
+void
+nsHostRecord::CopyExpirationTimesAndFlagsFrom(const nsHostRecord *aFromHostRecord)
+{
+    // This is used to copy information from a cache entry to a record. All
+    // information necessary for HasUsableRecord needs to be copied.
+    mValidStart = aFromHostRecord->mValidStart;
+    mValidEnd = aFromHostRecord->mValidEnd;
+    mGraceStart = aFromHostRecord->mGraceStart;
+    mDoomed = aFromHostRecord->mDoomed;
+}
+
 nsHostRecord::~nsHostRecord()
 {
     Telemetry::Accumulate(Telemetry::DNS_BLACKLIST_COUNT, mBlacklistedCount);
@@ -451,14 +462,12 @@ HostDB_ClearEntry(PLDHashTable *table,
     NS_RELEASE(he->rec);
 }
 
-static bool
-HostDB_InitEntry(PLDHashTable *table,
-                 PLDHashEntryHdr *entry,
+static void
+HostDB_InitEntry(PLDHashEntryHdr *entry,
                  const void *key)
 {
     nsHostDBEnt *he = static_cast<nsHostDBEnt *>(entry);
     nsHostRecord::Create(static_cast<const nsHostKey *>(key), &he->rec);
-    return true;
 }
 
 static const PLDHashTableOps gHostDB_ops =
@@ -756,7 +765,7 @@ nsHostResolver::ResolveHost(const char            *host,
 
             nsHostKey key = { host, flags, af };
             nsHostDBEnt *he = static_cast<nsHostDBEnt *>
-                                         (PL_DHashTableAdd(&mDB, &key));
+                (PL_DHashTableAdd(&mDB, &key, fallible));
 
             // if the record is null, the hash table OOM'd.
             if (!he) {
@@ -833,8 +842,9 @@ nsHostResolver::ResolveHost(const char            *host,
                     NS_ASSERTION(!unspecHe ||
                                  (unspecHe && unspecHe->rec),
                                 "Valid host entries should contain a record");
+                    TimeStamp now = TimeStamp::NowLoRes();
                     if (unspecHe &&
-                        unspecHe->rec->HasUsableResult(TimeStamp::NowLoRes(), flags)) {
+                        unspecHe->rec->HasUsableResult(now, flags)) {
 
                         MOZ_ASSERT(unspecHe->rec->addr_info || unspecHe->rec->negative,
                                    "Entry should be resolved or negative.");
@@ -845,6 +855,7 @@ nsHostResolver::ResolveHost(const char            *host,
                         he->rec->addr_info = nullptr;
                         if (unspecHe->rec->negative) {
                             he->rec->negative = unspecHe->rec->negative;
+                            he->rec->CopyExpirationTimesAndFlagsFrom(unspecHe->rec);
                         } else if (unspecHe->rec->addr_info) {
                             // Search for any valid address in the AF_UNSPEC entry
                             // in the cache (not blacklisted and from the right
@@ -858,6 +869,7 @@ nsHostResolver::ResolveHost(const char            *host,
                                         he->rec->addr_info = new AddrInfo(
                                             unspecHe->rec->addr_info->mHostName,
                                             unspecHe->rec->addr_info->mCanonicalName);
+                                        he->rec->CopyExpirationTimesAndFlagsFrom(unspecHe->rec);
                                     }
                                     he->rec->addr_info->AddAddress(
                                         new NetAddrElement(*addrIter));
@@ -865,8 +877,12 @@ nsHostResolver::ResolveHost(const char            *host,
                                 addrIter = addrIter->getNext();
                             }
                         }
-                        if (he->rec->HasUsableResult(TimeStamp::NowLoRes(), flags)) {
+                        // Now check if we have a new record.
+                        if (he->rec->HasUsableResult(now, flags)) {
                             result = he->rec;
+                            if (he->rec->negative) {
+                                status = NS_ERROR_UNKNOWN_HOST;
+                            }
                             Telemetry::Accumulate(Telemetry::DNS_LOOKUP_METHOD2,
                                                   METHOD_HIT);
                             ConditionallyRefreshRecord(he->rec, host);

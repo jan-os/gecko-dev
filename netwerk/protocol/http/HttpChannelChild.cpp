@@ -513,6 +513,11 @@ HttpChannelChild::DoOnStatus(nsIRequest* aRequest, nsresult status)
   if (!mProgressSink)
     GetCallback(mProgressSink);
 
+  // Temporary fix for bug 1116124
+  // See 1124971 - Child removes LOAD_BACKGROUND flag from channel
+  if (status == NS_OK)
+    return;
+
   // block status/progress after Cancel or OnStopRequest has been called,
   // or if channel has LOAD_BACKGROUND set.
   if (mProgressSink && NS_SUCCEEDED(mStatus) && mIsPending &&
@@ -939,7 +944,14 @@ HttpChannelChild::Redirect1Begin(const uint32_t& newChannelId,
   nsCOMPtr<nsIURI> uri = DeserializeURI(newUri);
 
   nsCOMPtr<nsIChannel> newChannel;
-  rv = ioService->NewChannelFromURI(uri, getter_AddRefs(newChannel));
+  rv = NS_NewChannelInternal(getter_AddRefs(newChannel),
+                             uri,
+                             mLoadInfo,
+                             nullptr, // aLoadGroup
+                             nullptr, // aCallbacks
+                             nsIRequest::LOAD_NORMAL,
+                             ioService);
+
   if (NS_FAILED(rv)) {
     // Veto redirect.  nsHttpChannel decides to cancel or continue.
     OnRedirectVerifyCallback(rv);

@@ -603,10 +603,15 @@ PluginAsyncSurrogate::GetPropertyHelper(NPObject* aObject, NPIdentifier aName,
     return false;
   }
 
-  WaitForInit();
+  if (!WaitForInit()) {
+    return false;
+  }
 
   AsyncNPObject* object = static_cast<AsyncNPObject*>(aObject);
   NPObject* realObject = object->GetRealObject();
+  if (!realObject) {
+    return false;
+  }
   if (realObject->_class != PluginScriptableObjectParent::GetClass()) {
     NS_ERROR("Don't know what kind of object this is!");
     return false;
@@ -614,6 +619,9 @@ PluginAsyncSurrogate::GetPropertyHelper(NPObject* aObject, NPIdentifier aName,
 
   PluginScriptableObjectParent* actor =
     static_cast<ParentNPObject*>(realObject)->parent;
+  if (!actor) {
+    return false;
+  }
   bool success = actor->GetPropertyHelper(aName, aHasProperty, aHasMethod, aResult);
   if (!success) {
     const NPNetscapeFuncs* npn = mParent->GetNetscapeFuncs();

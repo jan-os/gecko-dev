@@ -394,12 +394,12 @@ PluginModuleChromeParent::LoadModule(const char* aFilePath, uint32_t aPluginId,
 {
     PLUGIN_LOG_DEBUG_FUNCTION;
 
-    bool enableSandbox = false;
+    int32_t sandboxLevel = 0;
 #if defined(XP_WIN) && defined(MOZ_SANDBOX)
-    nsAutoCString sandboxPref("dom.ipc.plugins.sandbox.");
+    nsAutoCString sandboxPref("dom.ipc.plugins.sandbox-level.");
     sandboxPref.Append(aPluginTag->GetNiceFileName());
-    if (NS_FAILED(Preferences::GetBool(sandboxPref.get(), &enableSandbox))) {
-      enableSandbox = Preferences::GetBool("dom.ipc.plugins.sandbox.default");
+    if (NS_FAILED(Preferences::GetInt(sandboxPref.get(), &sandboxLevel))) {
+      sandboxLevel = Preferences::GetInt("dom.ipc.plugins.sandbox-level.default");
     }
 #endif
 
@@ -408,7 +408,7 @@ PluginModuleChromeParent::LoadModule(const char* aFilePath, uint32_t aPluginId,
     parent->mSubprocess->SetCallRunnableImmediately(!parent->mIsStartingAsync);
     TimeStamp launchStart = TimeStamp::Now();
     bool launched = parent->mSubprocess->Launch(Move(onLaunchedRunnable),
-                                                enableSandbox);
+                                                sandboxLevel);
     if (!launched) {
         // We never reached open
         parent->mShutdown = true;
@@ -1512,8 +1512,8 @@ PluginModuleParent::RecvBackUpXResources(const FileDescriptor& aXSocketFd)
 #ifndef MOZ_X11
     NS_RUNTIMEABORT("This message only makes sense on X11 platforms");
 #else
-    NS_ABORT_IF_FALSE(0 > mPluginXSocketFdDup.get(),
-                      "Already backed up X resources??");
+    MOZ_ASSERT(0 > mPluginXSocketFdDup.get(),
+               "Already backed up X resources??");
     mPluginXSocketFdDup.forget();
     if (aXSocketFd.IsValid()) {
       mPluginXSocketFdDup.reset(aXSocketFd.PlatformHandle());
@@ -1928,9 +1928,7 @@ PluginModuleParent::RecvNP_InitializeResult(const NPError& aError)
     }
 
     if (mIsStartingAsync) {
-#if defined(XP_WIN)
         SetPluginFuncs(mNPPIface);
-#endif
         InitAsyncSurrogates();
     }
 

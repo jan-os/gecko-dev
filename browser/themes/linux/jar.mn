@@ -28,8 +28,7 @@ browser.jar:
 * skin/classic/browser/browser-lightweightTheme.css
   skin/classic/browser/click-to-play-warning-stripes.png
   skin/classic/browser/content-contextmenu.svg
-  skin/classic/browser/dots.png                             (../shared/dots.png)
-  skin/classic/browser/dots@2x.png                          (../shared/dots@2x.png)
+  skin/classic/browser/drm-icon.svg                         (../shared/drm-icon.svg)
 * skin/classic/browser/engineManager.css
   skin/classic/browser/fullscreen-darknoise.png
   skin/classic/browser/Geolocation-16.png
@@ -175,8 +174,7 @@ browser.jar:
 * skin/classic/browser/preferences/in-content/preferences.css (preferences/in-content/preferences.css)
 * skin/classic/browser/preferences/in-content/dialog.css      (preferences/in-content/dialog.css)
   skin/classic/browser/preferences/in-content/favicon.ico     (../shared/incontentprefs/favicon.ico)
-  skin/classic/browser/preferences/in-content/icons.png       (../shared/incontentprefs/icons.png)
-  skin/classic/browser/preferences/in-content/icons@2x.png    (../shared/incontentprefs/icons@2x.png)
+  skin/classic/browser/preferences/in-content/icons.svg       (../shared/incontentprefs/icons.svg)
   skin/classic/browser/preferences/in-content/search.css      (../shared/incontentprefs/search.css)
   skin/classic/browser/preferences/applications.css   (preferences/applications.css)
   skin/classic/browser/preferences/aboutPermissions.css (preferences/aboutPermissions.css)

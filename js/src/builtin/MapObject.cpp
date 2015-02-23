@@ -823,7 +823,10 @@ HashableValue::operator==(const HashableValue &other) const
 
 #ifdef DEBUG
     bool same;
-    MOZ_ASSERT(SameValue(nullptr, value, other.value, &same));
+    PerThreadData *data = TlsPerThreadData.get();
+    RootedValue valueRoot(data, value);
+    RootedValue otherRoot(data, other.value);
+    MOZ_ASSERT(SameValue(nullptr, valueRoot, otherRoot, &same));
     MOZ_ASSERT(same == b);
 #endif
     return b;
@@ -901,7 +904,7 @@ MapIteratorObject::kind() const
 bool
 GlobalObject::initMapIteratorProto(JSContext *cx, Handle<GlobalObject *> global)
 {
-    JSObject *base = GlobalObject::getOrCreateIteratorPrototype(cx, global);
+    Rooted<JSObject*> base(cx, GlobalObject::getOrCreateIteratorPrototype(cx, global));
     if (!base)
         return false;
     Rooted<MapIteratorObject *> proto(cx,
@@ -1226,6 +1229,11 @@ MapObject::construct(JSContext *cx, unsigned argc, Value *vp)
         return false;
 
     CallArgs args = CallArgsFromVp(argc, vp);
+
+    // FIXME: bug 1083752
+    if (!WarnIfNotConstructing(cx, args, "Map"))
+        return false;
+
     if (!args.get(0).isNullOrUndefined()) {
         RootedValue adderVal(cx);
         if (!GetProperty(cx, obj, obj, cx->names().set, &adderVal))
@@ -1632,7 +1640,7 @@ SetIteratorObject::kind() const
 bool
 GlobalObject::initSetIteratorProto(JSContext *cx, Handle<GlobalObject*> global)
 {
-    JSObject *base = GlobalObject::getOrCreateIteratorPrototype(cx, global);
+    Rooted<JSObject*> base(cx, GlobalObject::getOrCreateIteratorPrototype(cx, global));
     if (!base)
         return false;
     Rooted<SetIteratorObject *> proto(cx,
@@ -1870,6 +1878,11 @@ SetObject::construct(JSContext *cx, unsigned argc, Value *vp)
         return false;
 
     CallArgs args = CallArgsFromVp(argc, vp);
+
+    // FIXME: bug 1083752
+    if (!WarnIfNotConstructing(cx, args, "Set"))
+        return false;
+
     if (!args.get(0).isNullOrUndefined()) {
         RootedValue adderVal(cx);
         if (!GetProperty(cx, obj, obj, cx->names().add, &adderVal))

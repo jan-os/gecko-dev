@@ -145,22 +145,6 @@ struct CachedOffsetForFrame {
   bool mCanCacheFrameOffset;    // cached frame offset is valid?
 };
 
-// Stack-class to turn on/off selection batching for table selection
-class MOZ_STACK_CLASS nsSelectionBatcher MOZ_FINAL
-{
-private:
-  nsCOMPtr<nsISelectionPrivate> mSelection;
-public:
-  explicit nsSelectionBatcher(nsISelectionPrivate *aSelection) : mSelection(aSelection)
-  {
-    if (mSelection) mSelection->StartBatchChanges();
-  }
-  ~nsSelectionBatcher() 
-  { 
-    if (mSelection) mSelection->EndBatchChanges();
-  }
-};
-
 class nsAutoScrollTimer MOZ_FINAL : public nsITimerCallback
 {
 public:
@@ -2175,7 +2159,7 @@ nsFrameSelection::HandleTableSelection(nsINode* aParentContent,
 
   // Stack-class to wrap all table selection changes in 
   //  BeginBatchChanges() / EndBatchChanges()
-  nsSelectionBatcher selectionBatcher(mDomSelections[index]);
+  SelectionBatcher selectionBatcher(mDomSelections[index]);
 
   int32_t startRowIndex, startColIndex, curRowIndex, curColIndex;
   if (mDragState && mDragSelectingCells)
@@ -3518,6 +3502,16 @@ Selection::AddItem(nsRange* aItem, int32_t* aOutIndex)
   if (mApplyUserSelectStyle) {
     nsAutoTArray<nsRefPtr<nsRange>, 4> rangesToAdd;
     aItem->ExcludeNonSelectableNodes(&rangesToAdd);
+    if (rangesToAdd.IsEmpty()) {
+      ErrorResult err;
+      nsINode* node = aItem->GetStartContainer(err);
+      if (node && node->IsContent() && node->AsContent()->GetEditingHost()) {
+        // A contenteditable node with user-select:none, for example.
+        // Allow it to have a collapsed selection (for the caret).
+        aItem->Collapse(GetDirection() == eDirPrevious);
+        rangesToAdd.AppendElement(aItem);
+      }
+    }
     for (size_t i = 0; i < rangesToAdd.Length(); ++i) {
       nsresult rv = AddItemInternal(rangesToAdd[i], aOutIndex);
       NS_ENSURE_SUCCESS(rv, rv);

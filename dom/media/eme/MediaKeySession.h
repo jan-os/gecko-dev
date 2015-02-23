@@ -39,7 +39,8 @@ public:
   NS_DECL_CYCLE_COLLECTION_CLASS_INHERITED(MediaKeySession,
                                            DOMEventTargetHelper)
 public:
-  MediaKeySession(nsPIDOMWindow* aParent,
+  MediaKeySession(JSContext* aCx,
+                  nsPIDOMWindow* aParent,
                   MediaKeys* aKeys,
                   const nsAString& aKeySystem,
                   SessionType aSessionType,
@@ -86,7 +87,7 @@ public:
 
   void DispatchKeyError(uint32_t system_code);
 
-  void DispatchKeysChange();
+  void DispatchKeyStatusesChange();
 
   void OnClosed();
 

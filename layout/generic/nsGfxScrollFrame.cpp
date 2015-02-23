@@ -3007,7 +3007,7 @@ ScrollFrameHelper::BuildDisplayList(nsDisplayListBuilder*   aBuilder,
     shouldBuildLayer = true;
   } else {
     shouldBuildLayer =
-      nsLayoutUtils::WantSubAPZC() &&
+      gfxPrefs::AsyncPanZoomEnabled() &&
       WantAsyncScroll() &&
       // If we are using containers for root frames, and we are the root
       // scroll frame for the display root, then we don't need a scroll
@@ -3177,7 +3177,8 @@ ScrollFrameHelper::ComputeFrameMetrics(Layer* aLayer,
   bool isRoot = mIsRoot && mOuter->PresContext()->IsRootContentDocument();
 
   *aOutput->AppendElement() =
-      nsDisplayScrollLayer::ComputeFrameMetrics(mScrolledFrame, mOuter,
+      nsDisplayScrollLayer::ComputeFrameMetrics(
+        mScrolledFrame, mOuter, mOuter->GetContent(),
         aContainerReferenceFrame, aLayer, mScrollParentID,
         scrollport, isRoot, aParameters);
 }

@@ -119,6 +119,13 @@ XPCOMUtils.defineLazyModuleGetter(this, "UpdateChannel",
                                   "resource://gre/modules/UpdateChannel.jsm");
 #endif
 
+
+#if defined(MOZ_UPDATE_CHANNEL) && MOZ_UPDATE_CHANNEL != release
+#define MOZ_DEBUG_UA // Shorthand define for subsequent conditional sections.
+XPCOMUtils.defineLazyModuleGetter(this, "UserAgentOverrides",
+                                  "resource://gre/modules/UserAgentOverrides.jsm");
+#endif
+
 XPCOMUtils.defineLazyGetter(this, "ShellService", function() {
   try {
     return Cc["@mozilla.org/browser/shell-service;1"].
@@ -413,6 +420,18 @@ BrowserGlue.prototype = {
 #endif
         break;
       case "browser-search-engine-modified":
+        // Ensure we cleanup the hiddenOneOffs pref when removing
+        // an engine, and that newly added engines are visible.
+        if (data == "engine-added" || data == "engine-removed") {
+          let engineName = subject.QueryInterface(Ci.nsISearchEngine).name;
+          let hiddenPref =
+            Services.prefs.getCharPref("browser.search.hiddenOneOffs");
+          let hiddenEngines = hiddenPref ? hiddenPref.split(",") : [];
+          hiddenEngines = hiddenEngines.filter(x => x !== engineName);
+          Services.prefs.setCharPref("browser.search.hiddenOneOffs",
+                                     hiddenEngines.join(","));
+        }
+
         if (data != "engine-default" && data != "engine-current") {
           break;
         }
@@ -581,9 +600,6 @@ BrowserGlue.prototype = {
       SignInToWebsiteUX.init();
     }
 #endif
-#ifdef NIGHTLY_BUILD
-    ShumwayUtils.init();
-#endif
     webrtcUI.init();
     AboutHome.init();
     SessionStore.init();
@@ -600,6 +616,11 @@ BrowserGlue.prototype = {
 
 #ifdef NIGHTLY_BUILD
     Services.prefs.addObserver(POLARIS_ENABLED, this, false);
+#endif
+
+#ifdef MOZ_DEBUG_UA
+    UserAgentOverrides.init();
+    DebugUserAgent.init();
 #endif
 
     Services.obs.notifyObservers(null, "browser-ui-startup-complete", "");
@@ -756,6 +777,12 @@ BrowserGlue.prototype = {
     // With older versions of the extension installed, this load will fail
     // passively.
     aWindow.messageManager.loadFrameScript("resource://pdf.js/pdfjschildbootstrap.js", true);
+#ifdef NIGHTLY_BUILD
+    // Registering Shumway bootstrap script the child processes.
+    aWindow.messageManager.loadFrameScript("chrome://shumway/content/bootstrap-content.js", true);
+    // Initializing Shumway (shall be run after child script registration).
+    ShumwayUtils.init();
+#endif
 #ifdef XP_WIN
     // For windows seven, initialize the jump list module.
     const WINTASKBAR_CONTRACTID = "@mozilla.org/windows-taskbar;1";
@@ -827,6 +854,9 @@ BrowserGlue.prototype = {
     if (Services.prefs.getBoolPref("dom.identity.enabled")) {
       SignInToWebsiteUX.uninit();
     }
+#endif
+#ifdef MOZ_DEBUG_UA
+    UserAgentOverrides.uninit();
 #endif
     webrtcUI.uninit();
     FormValidationHandler.uninit();
@@ -2745,3 +2775,36 @@ let globalMM = Cc["@mozilla.org/globalmessagemanager;1"].getService(Ci.nsIMessag
 globalMM.addMessageListener("UITour:onPageEvent", function(aMessage) {
   UITour.onPageEvent(aMessage, aMessage.data);
 });
+
+#ifdef MOZ_DEBUG_UA
+// Modify the user agent string for specific domains
+// to route debug information through their logging.
+var DebugUserAgent = {
+  DEBUG_UA: null,
+  DOMAINS: [
+    'youtube.com',
+    'www.youtube.com',
+    'youtube-nocookie.com',
+    'www.youtube-nocookie.com',
+  ],
+
+  init: function() {
+    // Only run if the MediaSource Extension API is available.
+    if (!Services.prefs.getBoolPref("media.mediasource.enabled")) {
+      return;
+    }
+    // Install our override filter.
+    UserAgentOverrides.addComplexOverride(this.onRequest.bind(this));
+    let ua = Cc["@mozilla.org/network/protocol;1?name=http"]
+                .getService(Ci.nsIHttpProtocolHandler).userAgent;
+    this.DEBUG_UA = ua + " Build/" + Services.appinfo.appBuildID;
+  },
+
+  onRequest: function(channel, defaultUA) {
+    if (this.DOMAINS.indexOf(channel.URI.host) != -1) {
+      return this.DEBUG_UA;
+    }
+    return null;
+  },
+};
+#endif // MOZ_DEBUG_UA

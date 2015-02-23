@@ -2440,6 +2440,20 @@ Navigator::HasTVSupport(JSContext* aCx, JSObject* aGlobal)
 }
 
 /* static */
+bool
+Navigator::IsE10sEnabled(JSContext* aCx, JSObject* aGlobal)
+{
+  return XRE_GetProcessType() == GeckoProcessType_Content;
+}
+
+bool
+Navigator::MozE10sEnabled()
+{
+  // This will only be called if IsE10sEnabled() is true.
+  return true;
+}
+
+/* static */
 already_AddRefed<nsPIDOMWindow>
 Navigator::GetWindowFromGlobal(JSObject* aGlobal)
 {
@@ -2608,13 +2622,29 @@ Navigator::RequestMediaKeySystemAccess(const nsAString& aKeySystem,
     return nullptr;
   }
 
+  if (!Preferences::GetBool("media.eme.enabled", false)) {
+    // EME disabled by user, send notification to chrome so UI can
+    // inform user.
+    MediaKeySystemAccess::NotifyObservers(mWindow, aKeySystem,
+                                          MediaKeySystemStatus::Api_disabled);
+    p->MaybeReject(NS_ERROR_DOM_NOT_SUPPORTED_ERR);
+    return p.forget();
+  }
+
   if (aKeySystem.IsEmpty() ||
       (aOptions.WasPassed() && aOptions.Value().IsEmpty())) {
     p->MaybeReject(NS_ERROR_DOM_INVALID_ACCESS_ERR);
     return p.forget();
   }
 
-  if (!MediaKeySystemAccess::IsKeySystemSupported(aKeySystem)) {
+  MediaKeySystemStatus status = MediaKeySystemAccess::GetKeySystemStatus(aKeySystem);
+  if (status != MediaKeySystemStatus::Available) {
+    if (status != MediaKeySystemStatus::Error) {
+      // Failed due to user disabling something, send a notification to
+      // chrome, so we can show some UI to explain how the user can rectify
+      // the situation.
+      MediaKeySystemAccess::NotifyObservers(mWindow, aKeySystem, status);
+    }
     p->MaybeReject(NS_ERROR_DOM_NOT_SUPPORTED_ERR);
     return p.forget();
   }

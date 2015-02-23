@@ -74,6 +74,9 @@ XPCOMUtils.defineLazyGetter(this, "log", () => {
 this.UITour = {
   url: null,
   seenPageIDs: null,
+  // This map is not persisted and is used for
+  // building the content source of a potential tour.
+  pageIDsForSession: new Map(),
   pageIDSourceBrowsers: new WeakMap(),
   /* Map from browser chrome windows to a Set of <browser>s in which a tour is open (both visible and hidden) */
   tourBrowsersByWindow: new WeakMap(),
@@ -136,23 +139,23 @@ this.UITour = {
     ["loop-newRoom", {
       infoPanelPosition: "leftcenter topright",
       query: (aDocument) => {
-        let loopBrowser = aDocument.querySelector("#loop-notification-panel > #loop-panel-iframe");
-        if (!loopBrowser) {
+        let loopUI = aDocument.defaultView.LoopUI;
+        if (loopUI.selectedTab != "rooms") {
           return null;
         }
         // Use the parentElement full-width container of the button so our arrow
         // doesn't overlap the panel contents much.
-        return loopBrowser.contentDocument.querySelector(".new-room-button").parentElement;
+        return loopUI.browser.contentDocument.querySelector(".new-room-button").parentElement;
       },
     }],
     ["loop-roomList", {
       infoPanelPosition: "leftcenter topright",
       query: (aDocument) => {
-        let loopBrowser = aDocument.querySelector("#loop-notification-panel > #loop-panel-iframe");
-        if (!loopBrowser) {
+        let loopUI = aDocument.defaultView.LoopUI;
+        if (loopUI.selectedTab != "rooms") {
           return null;
         }
-        return loopBrowser.contentDocument.querySelector(".room-list");
+        return loopUI.browser.contentDocument.querySelector(".room-list");
       },
     }],
     ["loop-selectedRoomButtons", {
@@ -175,7 +178,7 @@ this.UITour = {
     }],
     ["loop-signInUpLink", {
       query: (aDocument) => {
-        let loopBrowser = aDocument.querySelector("#loop-notification-panel > #loop-panel-iframe");
+        let loopBrowser = aDocument.defaultView.LoopUI.browser;
         if (!loopBrowser) {
           return null;
         }
@@ -375,16 +378,22 @@ this.UITour = {
 
     switch (action) {
       case "registerPageID": {
-        // This is only relevant if Telemtry is enabled.
+        if (typeof data.pageID != "string") {
+          log.warn("registerPageID: pageID must be a string");
+          break;
+        }
+
+        this.pageIDsForSession.set(data.pageID, {lastSeen: Date.now()});
+
+        // The rest is only relevant if Telemetry is enabled.
         if (!UITelemetry.enabled) {
-          log.debug("registerPageID: Telemery disabled, not doing anything");
+          log.debug("registerPageID: Telemetry disabled, not doing anything");
           break;
         }
 
         // We don't want to allow BrowserUITelemetry.BUCKET_SEPARATOR in the
         // pageID, as it could make parsing the telemetry bucket name difficult.
-        if (typeof data.pageID != "string" ||
-            data.pageID.contains(BrowserUITelemetry.BUCKET_SEPARATOR)) {
+        if (data.pageID.contains(BrowserUITelemetry.BUCKET_SEPARATOR)) {
           log.warn("registerPageID: Invalid page ID specified");
           break;
         }
@@ -1120,6 +1129,26 @@ this.UITour = {
   },
 
   /**
+   * The node to which a highlight or notification(-popup) is anchored is sometimes
+   * obscured because it may be inside an overflow menu. This function should figure
+   * that out and offer the overflow chevron as an alternative.
+   *
+   * @param {Node} aAnchor The element that's supposed to be the anchor
+   * @type {Node}
+   */
+  _correctAnchor: function(aAnchor) {
+    // If the target is in the overflow panel, just return the overflow button.
+    if (aAnchor.getAttribute("overflowedItem")) {
+      let doc = aAnchor.ownerDocument;
+      let placement = CustomizableUI.getPlacementOfWidget(aAnchor.id);
+      let areaNode = doc.getElementById(placement.area);
+      return areaNode.overflowable._chevron;
+    }
+
+    return aAnchor;
+  },
+
+  /**
    * @param aChromeWindow The chrome window that the highlight is in. Necessary since some targets
    *                      are in a sub-frame so the defaultView is not the same as the chrome
    *                      window.
@@ -1158,16 +1187,7 @@ this.UITour = {
       highlighter.parentElement.setAttribute("targetName", aTarget.targetName);
       highlighter.parentElement.hidden = false;
 
-      let highlightAnchor;
-      // If the target is in the overflow panel, just highlight the overflow button.
-      if (aTarget.node.getAttribute("overflowedItem")) {
-        let doc = aTarget.node.ownerDocument;
-        let placement = CustomizableUI.getPlacementOfWidget(aTarget.widgetName || aTarget.node.id);
-        let areaNode = doc.getElementById(placement.area);
-        highlightAnchor = areaNode.overflowable._chevron;
-      } else {
-        highlightAnchor = aTarget.node;
-      }
+      let highlightAnchor = this._correctAnchor(aTarget.node);
       let targetRect = highlightAnchor.getBoundingClientRect();
       let highlightHeight = targetRect.height;
       let highlightWidth = targetRect.width;
@@ -1366,7 +1386,7 @@ this.UITour = {
 
     this._setAppMenuStateForAnnotation(aChromeWindow, "info",
                                        this.targetIsInAppMenu(aAnchor),
-                                       showInfoPanel.bind(this, aAnchor.node));
+                                       showInfoPanel.bind(this, this._correctAnchor(aAnchor.node)));
   },
 
   hideInfo: function(aWindow) {

@@ -1629,29 +1629,6 @@ MediaManager::GetUserMedia(
     c.mVideo.SetAsBoolean() = false;
   }
 
-#if defined(ANDROID) || defined(MOZ_WIDGET_GONK)
-  // Be backwards compatible only on mobile and only for facingMode.
-  if (c.mVideo.IsMediaTrackConstraints()) {
-    auto& tc = c.mVideo.GetAsMediaTrackConstraints();
-    if (!tc.mRequire.WasPassed() &&
-        tc.mMandatory.mFacingMode.WasPassed() && !tc.mFacingMode.WasPassed()) {
-      tc.mFacingMode.Construct().SetAsString() = tc.mMandatory.mFacingMode.Value();
-      tc.mRequire.Construct().AppendElement(NS_LITERAL_STRING("facingMode"));
-    }
-    if (tc.mOptional.WasPassed() && !tc.mAdvanced.WasPassed()) {
-      tc.mAdvanced.Construct();
-      for (size_t i = 0; i < tc.mOptional.Value().Length(); i++) {
-        if (tc.mOptional.Value()[i].mFacingMode.WasPassed()) {
-          MediaTrackConstraintSet n;
-          n.mFacingMode.Construct().SetAsString() =
-              tc.mOptional.Value()[i].mFacingMode.Value();
-          tc.mAdvanced.Value().AppendElement(n);
-        }
-      }
-    }
-  }
-#endif
-
   if (c.mVideo.IsMediaTrackConstraints() && !privileged) {
     auto& tc = c.mVideo.GetAsMediaTrackConstraints();
     // only allow privileged content to set the window id
@@ -1682,6 +1659,18 @@ MediaManager::GetUserMedia(
   }
 
   nsIURI* docURI = aWindow->GetDocumentURI();
+
+  bool isLoop = false;
+  nsCOMPtr<nsIURI> loopURI;
+  nsresult rv = NS_NewURI(getter_AddRefs(loopURI), "about:loopconversation");
+  NS_ENSURE_SUCCESS(rv, rv);
+  rv = docURI->EqualsExceptRef(loopURI, &isLoop);
+  NS_ENSURE_SUCCESS(rv, rv);
+
+  if (isLoop) {
+    privileged = true;
+  }
+
 
   if (c.mVideo.IsMediaTrackConstraints()) {
     auto& tc = c.mVideo.GetAsMediaTrackConstraints();
@@ -1725,6 +1714,17 @@ MediaManager::GetUserMedia(
     default:
       return task->Denied(NS_LITERAL_STRING("NotFoundError"));
     }
+
+    // For all but tab sharing, Loop needs to prompt as we are using the
+    // permission menu for selection of the device currently. For tab sharing,
+    // Loop has implicit permissions within Firefox, as it is built-in,
+    // and will manage the active tab and provide appropriate UI.
+    if (isLoop &&
+        (src == dom::MediaSourceEnum::Window ||
+         src == dom::MediaSourceEnum::Application ||
+         src == dom::MediaSourceEnum::Screen)) {
+       privileged = false;
+    }
   }
 
 #ifdef MOZ_B2G_CAMERA
@@ -1732,17 +1732,6 @@ MediaManager::GetUserMedia(
     mCameraManager = nsDOMCameraManager::CreateInstance(aWindow);
   }
 #endif
-
-  bool isLoop = false;
-  nsCOMPtr<nsIURI> loopURI;
-  nsresult rv = NS_NewURI(getter_AddRefs(loopURI), "about:loopconversation");
-  NS_ENSURE_SUCCESS(rv, rv);
-  rv = docURI->EqualsExceptRef(loopURI, &isLoop);
-  NS_ENSURE_SUCCESS(rv, rv);
-
-  if (isLoop) {
-    privileged = true;
-  }
 
   // XXX No full support for picture in Desktop yet (needs proper UI)
   if (privileged ||

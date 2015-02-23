@@ -392,21 +392,13 @@ class CGDOMJSClass(CGThing):
                       ${objectMoved} /* objectMovedOp */
                     },
                     {
-                      nullptr, /* lookupGeneric */
                       nullptr, /* lookupProperty */
-                      nullptr, /* lookupElement */
-                      nullptr, /* defineGeneric */
                       nullptr, /* defineProperty */
-                      nullptr, /* defineElement */
-                      nullptr, /* getGeneric  */
+                      nullptr, /* hasProperty */
                       nullptr, /* getProperty */
-                      nullptr, /* getElement */
-                      nullptr, /* setGeneric */
                       nullptr, /* setProperty */
-                      nullptr, /* setElement */
                       nullptr, /* getOwnPropertyDescriptor */
-                      nullptr, /* setGenericAttributes */
-                      nullptr, /* deleteGeneric */
+                      nullptr, /* deleteProperty */
                       nullptr, /* watch */
                       nullptr, /* unwatch */
                       nullptr, /* getElements */
@@ -696,12 +688,9 @@ def InterfaceObjectProtoGetter(descriptor):
            interface prototype as a JS::Handle<JSObject*> or None if no such
            function exists.
     """
-    parentWithInterfaceObject = descriptor.interface.parent
-    while (parentWithInterfaceObject and
-           not parentWithInterfaceObject.hasInterfaceObject()):
-        parentWithInterfaceObject = parentWithInterfaceObject.parent
-    if parentWithInterfaceObject:
-        parentIfaceName = parentWithInterfaceObject.identifier.name
+    parentInterface = descriptor.interface.parent
+    if parentInterface:
+        parentIfaceName = parentInterface.identifier.name
         parentDesc = descriptor.getDescriptor(parentIfaceName)
         prefix = toBindingNamespace(parentDesc.name)
         protoGetter = prefix + "::GetConstructorObject"
@@ -2107,8 +2096,8 @@ def methodLength(method):
 
 def isMaybeExposedIn(member, descriptor):
     # All we can say for sure is that if this is a worker descriptor
-    # and member is only exposed in windows, then it's not exposed.
-    return not descriptor.workers or member.exposureSet != set(["Window"])
+    # and member is not exposed in any worker, then it's not exposed.
+    return not descriptor.workers or member.isExposedInAnyWorker()
 
 def clearableCachedAttrs(descriptor):
     return (m for m in descriptor.interface.members if
@@ -4061,7 +4050,9 @@ def getJSToNativeConversionInfo(type, descriptorProvider, failureCode=None,
                                         declArgs=declArgs)
 
     def incrementNestingLevel():
-        return 1 if nestingLevel is "" else ++nestingLevel
+        if nestingLevel is "":
+            return 1
+        return nestingLevel + 1
 
     assert not (isEnforceRange and isClamp)  # These are mutually exclusive
 
@@ -6840,12 +6831,14 @@ class CGMethodCall(CGThing):
         def filteredSignatures(signatures, descriptor):
             def typeExposedInWorkers(type):
                 return (not type.isGeckoInterface() or
-                        type.inner.isExternal() or
                         type.inner.isExposedInAnyWorker())
             if descriptor.workers:
                 # Filter out the signatures that should not be exposed in a
                 # worker.  The IDL parser enforces the return value being
                 # exposed correctly, but we have to check the argument types.
+                #
+                # If this code changes, adjust the self._deps
+                # computation in CGDDescriptor.__init__ as needed.
                 assert all(typeExposedInWorkers(sig[0]) for sig in signatures)
                 signatures = filter(
                     lambda sig: all(typeExposedInWorkers(arg.type)
@@ -11016,6 +11009,21 @@ class CGDescriptor(CGThing):
         assert not descriptor.concrete or descriptor.interface.hasInterfacePrototypeObject()
 
         self._deps = descriptor.interface.getDeps()
+        # If we have a worker descriptor, add dependencies on interface types we
+        # have as method arguments to overloaded methods.  See the
+        # filteredSignatures() bit in CGMethodCall.  Note that we have to add
+        # both interfaces that _are_ exposed in workers and ones that aren't;
+        # the idea is that we have to notice when the exposure set changes.
+        if descriptor.workers:
+            methods = (m for m in descriptor.interface.members if
+                       m.isMethod() and isMaybeExposedIn(m, descriptor) and
+                       len(m.signatures()) != 1)
+            for m in methods:
+                for sig in m.signatures():
+                    for arg in sig[1]:
+                        if (arg.type.isGeckoInterface() and
+                            not arg.type.inner.isExternal()):
+                            self._deps.add(arg.type.inner.filename())
 
         cgThings = []
         cgThings.append(CGGeneric(declare="typedef %s NativeType;\n" %

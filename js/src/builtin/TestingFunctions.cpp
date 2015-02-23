@@ -967,9 +967,30 @@ SaveStack(JSContext *cx, unsigned argc, jsval *vp)
         maxFrameCount = d;
     }
 
-    Rooted<JSObject*> stack(cx);
-    if (!JS::CaptureCurrentStack(cx, &stack, maxFrameCount))
+    JSCompartment *targetCompartment = cx->compartment();
+    if (args.length() >= 2) {
+        if (!args[1].isObject()) {
+            js_ReportValueErrorFlags(cx, JSREPORT_ERROR, JSMSG_UNEXPECTED_TYPE,
+                                     JSDVG_SEARCH_STACK, args[0], JS::NullPtr(),
+                                     "not an object", NULL);
+            return false;
+        }
+        RootedObject obj(cx, UncheckedUnwrap(&args[1].toObject()));
+        if (!obj)
+            return false;
+        targetCompartment = obj->compartment();
+    }
+
+    RootedObject stack(cx);
+    {
+        AutoCompartment ac(cx, targetCompartment);
+        if (!JS::CaptureCurrentStack(cx, &stack, maxFrameCount))
+            return false;
+    }
+
+    if (stack && !cx->compartment()->wrap(cx, &stack))
         return false;
+
     args.rval().setObjectOrNull(stack);
     return true;
 }
@@ -1019,7 +1040,7 @@ MakeFakePromise(JSContext *cx, unsigned argc, jsval *vp)
     if (!scope)
         return false;
 
-    RootedObject obj(cx, NewObjectWithGivenProto(cx, &FakePromiseClass, nullptr, scope));
+    RootedObject obj(cx, NewObjectWithGivenProto(cx, &FakePromiseClass, NullPtr(), scope));
     if (!obj)
         return false;
 
@@ -1842,8 +1863,8 @@ static bool
 DumpObject(JSContext *cx, unsigned argc, jsval *vp)
 {
     CallArgs args = CallArgsFromVp(argc, vp);
-    RootedObject obj(cx);
-    if (!JS_ConvertArguments(cx, args, "o", obj.address()))
+    RootedObject obj(cx, ToObject(cx, args.get(0)));
+    if (!obj)
         return false;
 
     js_DumpObject(obj);
@@ -2177,11 +2198,19 @@ static bool
 EvalReturningScope(JSContext *cx, unsigned argc, jsval *vp)
 {
     CallArgs args = CallArgsFromVp(argc, vp);
-
-    RootedString str(cx);
-    RootedObject global(cx);
-    if (!JS_ConvertArguments(cx, args, "S/o", str.address(), global.address()))
+    if (!args.requireAtLeast(cx, "evalReturningScope", 1))
         return false;
+
+    RootedString str(cx, ToString(cx, args[0]));
+    if (!str)
+        return false;
+
+    RootedObject global(cx);
+    if (args.hasDefined(1)) {
+        global = ToObject(cx, args[1]);
+        if (!global)
+            return false;
+    }
 
     AutoStableStringChars strChars(cx);
     if (!strChars.initTwoByte(cx, str))
@@ -2243,10 +2272,15 @@ static bool
 ShellCloneAndExecuteScript(JSContext *cx, unsigned argc, Value *vp)
 {
     CallArgs args = CallArgsFromVp(argc, vp);
+    if (!args.requireAtLeast(cx, "cloneAndExecuteScript", 2))
+        return false;
 
-    RootedString str(cx);
-    RootedObject global(cx);
-    if (!JS_ConvertArguments(cx, args, "So", str.address(), global.address()))
+    RootedString str(cx, ToString(cx, args[0]));
+    if (!str)
+        return false;
+
+    RootedObject global(cx, ToObject(cx, args[1]));
+    if (!global)
         return false;
 
     AutoStableStringChars strChars(cx);
@@ -2383,13 +2417,15 @@ static const JSFunctionSpecWithHelp TestingFunctions[] = {
 "  SavedStacks cache."),
 
     JS_FN_HELP("saveStack", SaveStack, 0, 0,
-"saveStack()",
-"  Capture a stack.\n"),
+"saveStack([maxDepth [, compartment]])",
+"  Capture a stack. If 'maxDepth' is given, capture at most 'maxDepth' number\n"
+"  of frames. If 'compartment' is given, allocate the js::SavedFrame instances\n"
+"  with the given object's compartment."),
 
     JS_FN_HELP("enableTrackAllocations", EnableTrackAllocations, 0, 0,
 "enableTrackAllocations()",
-"  Start capturing the JS stack at every allocation. Note that this sets an "
-"  object metadata callback that will override any other object metadata "
+"  Start capturing the JS stack at every allocation. Note that this sets an\n"
+"  object metadata callback that will override any other object metadata\n"
 "  callback that may be set."),
 
     JS_FN_HELP("disableTrackAllocations", DisableTrackAllocations, 0, 0,

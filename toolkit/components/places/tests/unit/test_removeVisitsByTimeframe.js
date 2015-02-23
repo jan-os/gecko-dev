@@ -23,11 +23,11 @@ add_task(function remove_visits_outside_unbookmarked_uri() {
   for (let i = 0; i < 10; i++) {
     visits.push({ uri: TEST_URI, visitDate: NOW - 1000 - i });
   }
-  yield promiseAddVisits(visits);
+  yield PlacesTestUtils.addVisits(visits);
 
   do_print("Remove visits using timerange outside the URI's visits.");
   PlacesUtils.history.removeVisitsByTimeframe(NOW - 10, NOW);
-  yield promiseAsyncUpdates();
+  yield PlacesTestUtils.promiseAsyncUpdates();
 
   do_print("URI should still exist in moz_places.");
   do_check_true(page_in_database(TEST_URI.spec));
@@ -49,7 +49,7 @@ add_task(function remove_visits_outside_unbookmarked_uri() {
   do_print("asyncHistory.isURIVisited should return true.");
   do_check_true(yield promiseIsURIVisited(TEST_URI));
 
-  yield promiseAsyncUpdates();
+  yield PlacesTestUtils.promiseAsyncUpdates();
   do_print("Frecency should be positive.")
   do_check_true(frecencyForUrl(TEST_URI) > 0);
 
@@ -64,17 +64,17 @@ add_task(function remove_visits_outside_bookmarked_uri() {
   for (let i = 0; i < 10; i++) {
     visits.push({ uri: TEST_URI, visitDate: NOW - 1000 - i });
   }
-  yield promiseAddVisits(visits);
+  yield PlacesTestUtils.addVisits(visits);
   do_print("Bookmark the URI.");
   PlacesUtils.bookmarks.insertBookmark(PlacesUtils.unfiledBookmarksFolderId,
                                        TEST_URI,
                                        PlacesUtils.bookmarks.DEFAULT_INDEX,
                                        "bookmark title");
-  yield promiseAsyncUpdates();
+  yield PlacesTestUtils.promiseAsyncUpdates();
 
   do_print("Remove visits using timerange outside the URI's visits.");
   PlacesUtils.history.removeVisitsByTimeframe(NOW - 10, NOW);
-  yield promiseAsyncUpdates();
+  yield PlacesTestUtils.promiseAsyncUpdates();
 
   do_print("URI should still exist in moz_places.");
   do_check_true(page_in_database(TEST_URI.spec));
@@ -95,7 +95,7 @@ add_task(function remove_visits_outside_bookmarked_uri() {
 
   do_print("asyncHistory.isURIVisited should return true.");
   do_check_true(yield promiseIsURIVisited(TEST_URI));
-  yield promiseAsyncUpdates();
+  yield PlacesTestUtils.promiseAsyncUpdates();
 
   do_print("Frecency should be positive.")
   do_check_true(frecencyForUrl(TEST_URI) > 0);
@@ -111,11 +111,11 @@ add_task(function remove_visits_unbookmarked_uri() {
   for (let i = 0; i < 10; i++) {
     visits.push({ uri: TEST_URI, visitDate: NOW - i });
   }
-  yield promiseAddVisits(visits);
+  yield PlacesTestUtils.addVisits(visits);
 
   do_print("Remove the 5 most recent visits.");
   PlacesUtils.history.removeVisitsByTimeframe(NOW - 4, NOW);
-  yield promiseAsyncUpdates();
+  yield PlacesTestUtils.promiseAsyncUpdates();
 
   do_print("URI should still exist in moz_places.");
   do_check_true(page_in_database(TEST_URI.spec));
@@ -136,7 +136,7 @@ add_task(function remove_visits_unbookmarked_uri() {
 
   do_print("asyncHistory.isURIVisited should return true.");
   do_check_true(yield promiseIsURIVisited(TEST_URI));
-  yield promiseAsyncUpdates();
+  yield PlacesTestUtils.promiseAsyncUpdates();
 
   do_print("Frecency should be positive.")
   do_check_true(frecencyForUrl(TEST_URI) > 0);
@@ -152,17 +152,17 @@ add_task(function remove_visits_bookmarked_uri() {
   for (let i = 0; i < 10; i++) {
     visits.push({ uri: TEST_URI, visitDate: NOW - i });
   }
-  yield promiseAddVisits(visits);
+  yield PlacesTestUtils.addVisits(visits);
   do_print("Bookmark the URI.");
   PlacesUtils.bookmarks.insertBookmark(PlacesUtils.unfiledBookmarksFolderId,
                                        TEST_URI,
                                        PlacesUtils.bookmarks.DEFAULT_INDEX,
                                        "bookmark title");
-  yield promiseAsyncUpdates();
+  yield PlacesTestUtils.promiseAsyncUpdates();
 
   do_print("Remove the 5 most recent visits.");
   PlacesUtils.history.removeVisitsByTimeframe(NOW - 4, NOW);
-  yield promiseAsyncUpdates();
+  yield PlacesTestUtils.promiseAsyncUpdates();
 
   do_print("URI should still exist in moz_places.");
   do_check_true(page_in_database(TEST_URI.spec));
@@ -183,7 +183,7 @@ add_task(function remove_visits_bookmarked_uri() {
 
   do_print("asyncHistory.isURIVisited should return true.");
   do_check_true(yield promiseIsURIVisited(TEST_URI));
-  yield promiseAsyncUpdates()
+  yield PlacesTestUtils.promiseAsyncUpdates()
 
   do_print("Frecency should be positive.")
   do_check_true(frecencyForUrl(TEST_URI) > 0);
@@ -199,11 +199,11 @@ add_task(function remove_all_visits_unbookmarked_uri() {
   for (let i = 0; i < 10; i++) {
     visits.push({ uri: TEST_URI, visitDate: NOW - i });
   }
-  yield promiseAddVisits(visits);
+  yield PlacesTestUtils.addVisits(visits);
 
   do_print("Remove all visits.");
   PlacesUtils.history.removeVisitsByTimeframe(NOW - 10, NOW);
-  yield promiseAsyncUpdates();
+  yield PlacesTestUtils.promiseAsyncUpdates();
 
   do_print("URI should no longer exist in moz_places.");
   do_check_false(page_in_database(TEST_URI.spec));
@@ -231,11 +231,11 @@ add_task(function remove_all_visits_unbookmarked_place_uri() {
   for (let i = 0; i < 10; i++) {
     visits.push({ uri: PLACE_URI, visitDate: NOW - i });
   }
-  yield promiseAddVisits(visits);
+  yield PlacesTestUtils.addVisits(visits);
 
   do_print("Remove all visits.");
   PlacesUtils.history.removeVisitsByTimeframe(NOW - 10, NOW);
-  yield promiseAsyncUpdates();
+  yield PlacesTestUtils.promiseAsyncUpdates();
 
   do_print("URI should still exist in moz_places.");
   do_check_true(page_in_database(PLACE_URI.spec));
@@ -252,7 +252,7 @@ add_task(function remove_all_visits_unbookmarked_place_uri() {
 
   do_print("asyncHistory.isURIVisited should return false.");
   do_check_false(yield promiseIsURIVisited(PLACE_URI));
-  yield promiseAsyncUpdates();
+  yield PlacesTestUtils.promiseAsyncUpdates();
 
   do_print("Frecency should be zero.")
   do_check_eq(frecencyForUrl(PLACE_URI.spec), 0);
@@ -268,17 +268,17 @@ add_task(function remove_all_visits_bookmarked_uri() {
   for (let i = 0; i < 10; i++) {
     visits.push({ uri: TEST_URI, visitDate: NOW - i });
   }
-  yield promiseAddVisits(visits);
+  yield PlacesTestUtils.addVisits(visits);
   do_print("Bookmark the URI.");
   PlacesUtils.bookmarks.insertBookmark(PlacesUtils.unfiledBookmarksFolderId,
                                        TEST_URI,
                                        PlacesUtils.bookmarks.DEFAULT_INDEX,
                                        "bookmark title");
-  yield promiseAsyncUpdates();
+  yield PlacesTestUtils.promiseAsyncUpdates();
 
   do_print("Remove all visits.");
   PlacesUtils.history.removeVisitsByTimeframe(NOW - 10, NOW);
-  yield promiseAsyncUpdates();
+  yield PlacesTestUtils.promiseAsyncUpdates();
 
   do_print("URI should still exist in moz_places.");
   do_check_true(page_in_database(TEST_URI.spec));
@@ -298,7 +298,7 @@ add_task(function remove_all_visits_bookmarked_uri() {
 
   do_print("nsINavBookmarksService.isBookmarked should return true.");
   do_check_true(PlacesUtils.bookmarks.isBookmarked(TEST_URI));
-  yield promiseAsyncUpdates();
+  yield PlacesTestUtils.promiseAsyncUpdates();
 
   do_print("Frecency should be negative.")
   do_check_true(frecencyForUrl(TEST_URI) < 0);
@@ -310,14 +310,14 @@ add_task(function remove_all_visits_bookmarked_uri() {
   do_print("*** TEST: Remove some visits from a zero frecency URI retains zero frecency");
 
   do_print("Add some visits for the URI.");
-  yield promiseAddVisits([{ uri: TEST_URI, transition: TRANSITION_FRAMED_LINK,
-                            visitDate: (NOW - 86400000000) },
-                          { uri: TEST_URI, transition: TRANSITION_FRAMED_LINK,
-                            visitDate: NOW }]);
+  yield PlacesTestUtils.addVisits([
+    { uri: TEST_URI, transition: TRANSITION_FRAMED_LINK, visitDate: (NOW - 86400000000) },
+    { uri: TEST_URI, transition: TRANSITION_FRAMED_LINK, visitDate: NOW }
+  ]);
 
   do_print("Remove newer visit.");
   PlacesUtils.history.removeVisitsByTimeframe(NOW - 10, NOW);
-  yield promiseAsyncUpdates();
+  yield PlacesTestUtils.promiseAsyncUpdates();
 
   do_print("URI should still exist in moz_places.");
   do_check_true(page_in_database(TEST_URI.spec));

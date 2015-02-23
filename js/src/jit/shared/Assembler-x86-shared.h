@@ -1767,6 +1767,64 @@ class AssemblerX86Shared : public AssemblerShared
         MOZ_ASSERT(HasSSE2());
         masm.vmovd_rr(src.code(), dest.code());
     }
+    void vmovd(const Operand &src, FloatRegister dest) {
+        MOZ_ASSERT(HasSSE2());
+        switch (src.kind()) {
+          case Operand::MEM_REG_DISP:
+            masm.vmovd_mr(src.disp(), src.base(), dest.code());
+            break;
+          case Operand::MEM_SCALE:
+            masm.vmovd_mr(src.disp(), src.base(), src.index(), src.scale(), dest.code());
+            break;
+          default:
+            MOZ_CRASH("unexpected operand kind");
+        }
+    }
+    void vmovd(FloatRegister src, const Operand &dest) {
+        MOZ_ASSERT(HasSSE2());
+        switch (dest.kind()) {
+          case Operand::MEM_REG_DISP:
+            masm.vmovd_rm(src.code(), dest.disp(), dest.base());
+            break;
+          case Operand::MEM_SCALE:
+            masm.vmovd_rm(src.code(), dest.disp(), dest.base(), dest.index(), dest.scale());
+            break;
+          case Operand::MEM_ADDRESS32:
+            masm.vmovq_rm(src.code(), dest.address());
+            break;
+          default:
+            MOZ_CRASH("unexpected operand kind");
+        }
+    }
+    void vmovq(const Operand &src, FloatRegister dest) {
+        MOZ_ASSERT(HasSSE2());
+        switch (src.kind()) {
+          case Operand::MEM_REG_DISP:
+            masm.vmovq_mr(src.disp(), src.base(), dest.code());
+            break;
+          case Operand::MEM_SCALE:
+            masm.vmovq_mr(src.disp(), src.base(), src.index(), src.scale(), dest.code());
+            break;
+          case Operand::MEM_ADDRESS32:
+            masm.vmovq_mr(src.address(), dest.code());
+            break;
+          default:
+            MOZ_CRASH("unexpected operand kind");
+        }
+    }
+    void vmovq(FloatRegister src, const Operand &dest) {
+        MOZ_ASSERT(HasSSE2());
+        switch (dest.kind()) {
+          case Operand::MEM_REG_DISP:
+            masm.vmovq_rm(src.code(), dest.disp(), dest.base());
+            break;
+          case Operand::MEM_SCALE:
+            masm.vmovq_rm(src.code(), dest.disp(), dest.base(), dest.index(), dest.scale());
+            break;
+          default:
+            MOZ_CRASH("unexpected operand kind");
+        }
+    }
     void vpaddd(const Operand &src1, FloatRegister src0, FloatRegister dest) {
         MOZ_ASSERT(HasSSE2());
         switch (src1.kind()) {

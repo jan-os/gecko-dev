@@ -195,6 +195,7 @@ describe("loop.shared.mixins", function() {
 
   describe("loop.shared.mixins.MediaSetupMixin", function() {
     var view, TestComp, rootObject;
+    var localElement, remoteElement, screenShareElement;
 
     beforeEach(function() {
       TestComp = React.createClass({
@@ -225,6 +226,23 @@ describe("loop.shared.mixins", function() {
       sharedMixins.setRootObject(rootObject);
 
       view = TestUtils.renderIntoDocument(React.createElement(TestComp));
+
+      sandbox.stub(view, "getDOMNode").returns({
+        querySelector: function(classSelector) {
+          if (classSelector.contains("local")) {
+            return localElement;
+          } else if (classSelector.contains("screen")) {
+            return screenShareElement;
+          }
+          return remoteElement;
+        }
+      });
+    });
+
+    afterEach(function() {
+      localElement = null;
+      remoteElement = null;
+      screenShareElement = null;
     });
 
     describe("#getDefaultPublisherConfig", function() {
@@ -235,20 +253,124 @@ describe("loop.shared.mixins", function() {
       });
     });
 
-    describe("Events", function() {
-      var localElement, remoteElement;
+    describe("#getRemoteVideoDimensions", function() {
+      var localVideoDimensions, remoteVideoDimensions;
 
       beforeEach(function() {
-        sandbox.stub(view, "getDOMNode").returns({
-          querySelector: function(classSelector) {
-            if (classSelector.contains("local")) {
-              return localElement;
-            }
-            return remoteElement;
+        localVideoDimensions = {
+          camera: {
+            width: 640,
+            height: 480
           }
-        });
+        };
       });
 
+      it("should fetch the correct stream sizes for leading axis width and full",
+        function() {
+          remoteVideoDimensions = {
+            screen: {
+              width: 240,
+              height: 320
+            }
+          };
+          screenShareElement = {
+            offsetWidth: 480,
+            offsetHeight: 700
+          };
+
+          view.updateVideoDimensions(localVideoDimensions, remoteVideoDimensions);
+          var result = view.getRemoteVideoDimensions("screen");
+
+          expect(result.width).eql(screenShareElement.offsetWidth);
+          expect(result.height).eql(screenShareElement.offsetHeight);
+          expect(result.streamWidth).eql(screenShareElement.offsetWidth);
+          // The real height of the stream accounting for the aspect ratio.
+          expect(result.streamHeight).eql(640);
+          expect(result.offsetX).eql(0);
+          // The remote element height (700) minus the stream height (640) split in 2.
+          expect(result.offsetY).eql(30);
+        });
+
+      it("should fetch the correct stream sizes for leading axis width and not full",
+        function() {
+          remoteVideoDimensions = {
+            camera: {
+              width: 240,
+              height: 320
+            }
+          };
+          remoteElement = {
+            offsetWidth: 640,
+            offsetHeight: 480
+          };
+
+          view.updateVideoDimensions(localVideoDimensions, remoteVideoDimensions);
+          var result = view.getRemoteVideoDimensions("camera");
+
+          expect(result.width).eql(remoteElement.offsetWidth);
+          expect(result.height).eql(remoteElement.offsetHeight);
+          // Aspect ratio modified from the height.
+          expect(result.streamWidth).eql(360);
+          expect(result.streamHeight).eql(remoteElement.offsetHeight);
+          // The remote element width (640) minus the stream width (360) split in 2.
+          expect(result.offsetX).eql(140);
+          expect(result.offsetY).eql(0);
+        });
+
+      it("should fetch the correct stream sizes for leading axis height and full",
+        function() {
+          remoteVideoDimensions = {
+            screen: {
+              width: 320,
+              height: 240
+            }
+          };
+          screenShareElement = {
+            offsetWidth: 700,
+            offsetHeight: 480
+          };
+
+          view.updateVideoDimensions(localVideoDimensions, remoteVideoDimensions);
+          var result = view.getRemoteVideoDimensions("screen");
+
+          expect(result.width).eql(screenShareElement.offsetWidth);
+          expect(result.height).eql(screenShareElement.offsetHeight);
+          // The real width of the stream accounting for the aspect ratio.
+          expect(result.streamWidth).eql(640);
+          expect(result.streamHeight).eql(screenShareElement.offsetHeight);
+          // The remote element width (700) minus the stream width (640) split in 2.
+          expect(result.offsetX).eql(30);
+          expect(result.offsetY).eql(0);
+        });
+
+      it("should fetch the correct stream sizes for leading axis height and not full",
+        function() {
+          remoteVideoDimensions = {
+            camera: {
+              width: 320,
+              height: 240
+            }
+          };
+          remoteElement = {
+            offsetWidth: 480,
+            offsetHeight: 640
+          };
+
+          view.updateVideoDimensions(localVideoDimensions, remoteVideoDimensions);
+          var result = view.getRemoteVideoDimensions("camera");
+
+          expect(result.width).eql(remoteElement.offsetWidth);
+          expect(result.height).eql(remoteElement.offsetHeight);
+          expect(result.streamWidth).eql(remoteElement.offsetWidth);
+          // Aspect ratio modified from the width.
+          expect(result.streamHeight).eql(360);
+          expect(result.offsetX).eql(0);
+          // The remote element width (640) minus the stream width (360) split in 2.
+          expect(result.offsetY).eql(140);
+        });
+    });
+
+    describe("Events", function() {
       describe("resize", function() {
         it("should update the width on the local stream element", function() {
           localElement = {
@@ -274,6 +396,19 @@ describe("loop.shared.mixins", function() {
           sandbox.clock.tick(10);
 
           expect(remoteElement.style.height).eql("100%");
+        });
+
+        it("should update the height on the screen share stream element", function() {
+          screenShareElement = {
+            offsetWidth: 100,
+            offsetHeight: 100,
+            style: { height: "0%" }
+          };
+
+          rootObject.events.resize();
+          sandbox.clock.tick(10);
+
+          expect(screenShareElement.style.height).eql("100%");
         });
       });
 
@@ -302,6 +437,19 @@ describe("loop.shared.mixins", function() {
           sandbox.clock.tick(10);
 
           expect(remoteElement.style.height).eql("100%");
+        });
+
+        it("should update the height on the screen share stream element", function() {
+          screenShareElement = {
+            offsetWidth: 100,
+            offsetHeight: 100,
+            style: { height: "0%" }
+          };
+
+          rootObject.events.orientationchange();
+          sandbox.clock.tick(10);
+
+          expect(screenShareElement.style.height).eql("100%");
         });
       });
 
@@ -338,21 +486,6 @@ describe("loop.shared.mixins", function() {
           expect(view._videoDimensionsCache.remote.camera.aspectRatio.width).eql(1);
           expect(view._videoDimensionsCache.remote.camera.aspectRatio.height)
             .eql(0.32857142857142857);
-        });
-
-        it("should fetch remote video stream dimensions correctly", function() {
-          remoteElement = {
-            offsetWidth: 600,
-            offsetHeight: 320
-          };
-
-          var remoteVideoDimensions = view.getRemoteVideoDimensions();
-          expect(remoteVideoDimensions.width).eql(remoteElement.offsetWidth);
-          expect(remoteVideoDimensions.height).eql(remoteElement.offsetHeight);
-          expect(remoteVideoDimensions.streamWidth).eql(534.8571428571429);
-          expect(remoteVideoDimensions.streamHeight).eql(remoteElement.offsetHeight);
-          expect(remoteVideoDimensions.offsetX).eql(32.571428571428555);
-          expect(remoteVideoDimensions.offsetY).eql(0);
         });
       });
     });

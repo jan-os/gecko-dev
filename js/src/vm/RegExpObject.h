@@ -68,7 +68,7 @@ class RegExpObjectBuilder
     Rooted<RegExpObject*> reobj_;
 
     bool getOrCreate();
-    bool getOrCreateClone(HandleTypeObject type);
+    bool getOrCreateClone(HandleObjectGroup group);
 
   public:
     explicit RegExpObjectBuilder(ExclusiveContext *cx, RegExpObject *reobj = nullptr);
@@ -499,6 +499,9 @@ XDRScriptRegExpObject(XDRState<mode> *xdr, MutableHandle<RegExpObject*> objp);
 
 extern JSObject *
 CloneScriptRegExpObject(JSContext *cx, RegExpObject &re);
+
+JSAtom *
+EscapeRegExpPattern(JSContext *cx, HandleAtom src);
 
 } /* namespace js */
 

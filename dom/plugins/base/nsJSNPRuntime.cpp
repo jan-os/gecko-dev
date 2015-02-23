@@ -222,21 +222,13 @@ const static js::Class sNPObjectJSWrapperClass =
       NPObjWrapper_ObjectMoved
     },
     {
-        nullptr, // lookupGeneric
         nullptr, // lookupProperty
-        nullptr, // lookupElement
-        nullptr, // defineGeneric
         nullptr, // defineProperty
-        nullptr, // defineElement
-        nullptr, // getGeneric
+        nullptr, // hasProperty
         nullptr, // getProperty
-        nullptr, // getElement
-        nullptr, // setGeneric
         nullptr, // setProperty
-        nullptr, // setElement
         nullptr, // getOwnPropertyDescriptor
-        nullptr, // setGenericAttributes
-        nullptr, // deleteGeneric
+        nullptr, // deleteProperty
         nullptr, nullptr, // watch/unwatch
         nullptr, // getElements
         NPObjWrapper_Enumerate,
@@ -1880,7 +1872,7 @@ nsNPObjWrapper::GetNewOrUsed(NPP npp, JSContext *cx, NPObject *npobj)
   }
 
   NPObjWrapperHashEntry *entry = static_cast<NPObjWrapperHashEntry *>
-    (PL_DHashTableAdd(&sNPObjWrappers, npobj));
+    (PL_DHashTableAdd(&sNPObjWrappers, npobj, fallible));
 
   if (!entry) {
     // Out of memory
@@ -2043,7 +2035,7 @@ LookupNPP(NPObject *npobj)
   }
 
   NPObjWrapperHashEntry *entry = static_cast<NPObjWrapperHashEntry *>
-    (PL_DHashTableAdd(&sNPObjWrappers, npobj));
+    (PL_DHashTableAdd(&sNPObjWrappers, npobj, fallible));
 
   if (!entry) {
     return nullptr;

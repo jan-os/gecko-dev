@@ -182,8 +182,8 @@ ContentEventHandler::QueryContentRect(nsIContent* aContent,
     resultRect.UnionRect(resultRect, frameRect);
   }
 
-  aEvent->mReply.mRect =
-      resultRect.ToOutsidePixels(mPresContext->AppUnitsPerDevPixel());
+  aEvent->mReply.mRect = LayoutDevicePixel::FromUntyped(
+      resultRect.ToOutsidePixels(mPresContext->AppUnitsPerDevPixel()));
   aEvent->mSucceeded = true;
 
   return NS_OK;
@@ -251,9 +251,8 @@ static uint32_t CountNewlinesInXPLength(nsIContent* aContent,
     return 0;
   }
   // For automated tests, we should abort on debug build.
-  NS_ABORT_IF_FALSE(
-    (aXPLength == UINT32_MAX || aXPLength <= text->GetLength()),
-    "aXPLength is out-of-bounds");
+  MOZ_ASSERT(aXPLength == UINT32_MAX || aXPLength <= text->GetLength(),
+             "aXPLength is out-of-bounds");
   const uint32_t length = std::min(aXPLength, text->GetLength());
   uint32_t newlines = 0;
   for (uint32_t i = 0; i < length; ++i) {
@@ -283,7 +282,7 @@ static uint32_t CountNewlinesInNativeLength(nsIContent* aContent,
        i < xpLength && nativeOffset < aNativeLength;
        ++i, ++nativeOffset) {
     // For automated tests, we should abort on debug build.
-    NS_ABORT_IF_FALSE(i < text->GetLength(), "i is out-of-bounds");
+    MOZ_ASSERT(i < text->GetLength(), "i is out-of-bounds");
     if (text->CharAt(i) == '\n') {
       ++newlines;
       ++nativeOffset;
@@ -943,8 +942,13 @@ ContentEventHandler::OnQueryTextRect(WidgetQueryContentEvent* aEvent)
   nsPoint ptOffset;
   firstFrame->GetPointFromOffset(nodeOffset, &ptOffset);
   // minus 1 to avoid creating an empty rect
-  rect.x += ptOffset.x - 1;
-  rect.width -= ptOffset.x - 1;
+  if (firstFrame->GetWritingMode().IsVertical()) {
+    rect.y += ptOffset.y - 1;
+    rect.height -= ptOffset.y - 1;
+  } else {
+    rect.x += ptOffset.x - 1;
+    rect.width -= ptOffset.x - 1;
+  }
 
   // get the ending frame
   nodeOffset = range->EndOffset();
@@ -985,15 +989,20 @@ ContentEventHandler::OnQueryTextRect(WidgetQueryContentEvent* aEvent)
   // get the ending frame rect
   lastFrame->GetPointFromOffset(nodeOffset, &ptOffset);
   // minus 1 to avoid creating an empty rect
-  frameRect.width -= lastFrame->GetRect().width - ptOffset.x - 1;
+  if (lastFrame->GetWritingMode().IsVertical()) {
+    frameRect.height -= lastFrame->GetRect().height - ptOffset.y - 1;
+  } else {
+    frameRect.width -= lastFrame->GetRect().width - ptOffset.x - 1;
+  }
 
   if (firstFrame == lastFrame) {
     rect.IntersectRect(rect, frameRect);
   } else {
     rect.UnionRect(rect, frameRect);
   }
-  aEvent->mReply.mRect =
-      rect.ToOutsidePixels(mPresContext->AppUnitsPerDevPixel());
+  aEvent->mReply.mRect = LayoutDevicePixel::FromUntyped(
+      rect.ToOutsidePixels(mPresContext->AppUnitsPerDevPixel()));
+  aEvent->mReply.mWritingMode = lastFrame->GetWritingMode();
   aEvent->mSucceeded = true;
   return NS_OK;
 }
@@ -1043,8 +1052,8 @@ ContentEventHandler::OnQueryCaretRect(WidgetQueryContentEvent* aEvent)
       }
       rv = ConvertToRootViewRelativeOffset(caretFrame, caretRect);
       NS_ENSURE_SUCCESS(rv, rv);
-      aEvent->mReply.mRect =
-        caretRect.ToOutsidePixels(caretFrame->PresContext()->AppUnitsPerDevPixel());
+      aEvent->mReply.mRect = LayoutDevicePixel::FromUntyped(
+        caretRect.ToOutsidePixels(caretFrame->PresContext()->AppUnitsPerDevPixel()));
       aEvent->mReply.mOffset = aEvent->mInput.mOffset;
       aEvent->mSucceeded = true;
       return NS_OK;
@@ -1076,8 +1085,8 @@ ContentEventHandler::OnQueryCaretRect(WidgetQueryContentEvent* aEvent)
   rv = ConvertToRootViewRelativeOffset(frame, rect);
   NS_ENSURE_SUCCESS(rv, rv);
 
-  aEvent->mReply.mRect =
-      rect.ToOutsidePixels(mPresContext->AppUnitsPerDevPixel());
+  aEvent->mReply.mRect = LayoutDevicePixel::FromUntyped(
+      rect.ToOutsidePixels(mPresContext->AppUnitsPerDevPixel()));
   aEvent->mSucceeded = true;
   return NS_OK;
 }
@@ -1149,9 +1158,8 @@ ContentEventHandler::OnQueryCharacterAtPoint(WidgetQueryContentEvent* aEvent)
   eventOnRoot.mUseNativeLineBreak = aEvent->mUseNativeLineBreak;
   eventOnRoot.refPoint = aEvent->refPoint;
   if (rootWidget != aEvent->widget) {
-    eventOnRoot.refPoint += LayoutDeviceIntPoint::FromUntyped(
-      aEvent->widget->WidgetToScreenOffset() -
-        rootWidget->WidgetToScreenOffset());
+    eventOnRoot.refPoint += aEvent->widget->WidgetToScreenOffset() -
+      rootWidget->WidgetToScreenOffset();
   }
   nsPoint ptInRoot =
     nsLayoutUtils::GetEventCoordinatesRelativeTo(&eventOnRoot, rootFrame);
@@ -1214,8 +1222,7 @@ ContentEventHandler::OnQueryDOMWidgetHittest(WidgetQueryContentEvent* aEvent)
   nsIFrame* docFrame = mPresShell->GetRootFrame();
   NS_ENSURE_TRUE(docFrame, NS_ERROR_FAILURE);
 
-  LayoutDeviceIntPoint eventLoc = aEvent->refPoint +
-    LayoutDeviceIntPoint::FromUntyped(aEvent->widget->WidgetToScreenOffset());
+  LayoutDeviceIntPoint eventLoc = aEvent->refPoint + aEvent->widget->WidgetToScreenOffset();
   nsIntRect docFrameRect = docFrame->GetScreenRect(); // Returns CSS pixels
   CSSIntPoint eventLocCSS(
     mPresContext->DevPixelsToIntCSSPixels(eventLoc.x) - docFrameRect.x,

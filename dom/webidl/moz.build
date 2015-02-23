@@ -9,7 +9,6 @@ GENERATED_WEBIDL_FILES = [
 ]
 
 PREPROCESSED_WEBIDL_FILES = [
-    'Crypto.webidl',
     'HTMLMediaElement.webidl',
     'Navigator.webidl',
     'Window.webidl',
@@ -81,6 +80,7 @@ WEBIDL_FILES = [
     'ContainerBoxObject.webidl',
     'ConvolverNode.webidl',
     'Coordinates.webidl',
+    'Crypto.webidl',
     'CSPReport.webidl',
     'CSS.webidl',
     'CSSPrimitiveValue.webidl',
@@ -321,6 +321,8 @@ WEBIDL_FILES = [
     'ParentNode.webidl',
     'Performance.webidl',
     'PerformanceEntry.webidl',
+    'PerformanceMark.webidl',
+    'PerformanceMeasure.webidl',
     'PerformanceNavigation.webidl',
     'PerformanceResourceTiming.webidl',
     'PerformanceTiming.webidl',
@@ -446,7 +448,6 @@ WEBIDL_FILES = [
     'SVGGElement.webidl',
     'SVGGradientElement.webidl',
     'SVGGraphicsElement.webidl',
-    'SVGIFrameElement.webidl',
     'SVGImageElement.webidl',
     'SVGLength.webidl',
     'SVGLengthList.webidl',
@@ -632,6 +633,7 @@ if CONFIG['MOZ_B2G_BT']:
             'BluetoothClassOfDevice.webidl',
             'BluetoothDevice2.webidl',
             'BluetoothDiscoveryHandle.webidl',
+            'BluetoothGatt.webidl',
             'BluetoothManager2.webidl',
             'BluetoothPairingHandle.webidl',
             'BluetoothPairingListener.webidl',
@@ -659,6 +661,12 @@ if CONFIG['MOZ_NFC']:
          'MozNFCPeer.webidl',
          'MozNFCTag.webidl',
          'NfcOptions.webidl',
+    ]
+
+if CONFIG['MOZ_SECUREELEMENT']:
+    WEBIDL_FILES += [
+         'SecureElement.webidl',
+         'SecureElementManager.webidl',
     ]
 
 if CONFIG['MOZ_WIDGET_TOOLKIT'] == 'gonk':
@@ -808,6 +816,7 @@ if CONFIG['MOZ_EME']:
         'MediaKeyMessageEvent.webidl',
         'MediaKeys.webidl',
         'MediaKeySession.webidl',
+        'MediaKeysRequestStatus.webidl',
         'MediaKeyStatusMap.webidl',
         'MediaKeySystemAccess.webidl',
     ]

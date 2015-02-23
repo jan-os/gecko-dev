@@ -275,7 +275,7 @@ public:
     : mElement(aElement),
       mLoadID(aElement->GetCurrentLoadID())
   {
-    NS_ABORT_IF_FALSE(mElement, "Must pass an element to call back");
+    MOZ_ASSERT(mElement, "Must pass an element to call back");
   }
 
 private:
@@ -519,7 +519,7 @@ already_AddRefed<MediaSource>
 HTMLMediaElement::GetMozMediaSourceObject() const
 {
   nsRefPtr<MediaSource> source;
-  if (IsMediaSourceURI(mLoadingSrc)) {
+  if (mLoadingSrc && IsMediaSourceURI(mLoadingSrc)) {
     NS_GetSourceForMediaSourceURI(mLoadingSrc, getter_AddRefs(source));
   }
   return source.forget();
@@ -864,6 +864,7 @@ void HTMLMediaElement::SelectResource()
         "Should think we're not loading from source children by default");
 
       mLoadingSrc = uri;
+      UpdatePreloadAction();
       if (mPreloadAction == HTMLMediaElement::PRELOAD_NONE) {
         // preload:none media, suspend the load here before we make any
         // network requests.
@@ -1078,9 +1079,12 @@ void HTMLMediaElement::UpdatePreloadAction()
     // Find the appropriate preload action by looking at the attribute.
     const nsAttrValue* val = mAttrsAndChildren.GetAttr(nsGkAtoms::preload,
                                                        kNameSpaceID_None);
-    uint32_t preloadDefault =
-      Preferences::GetInt("media.preload.default",
-                          HTMLMediaElement::PRELOAD_ATTR_METADATA);
+    // MSE doesn't work if preload is none, so it ignores the pref when src is
+    // from MSE.
+    uint32_t preloadDefault = (mLoadingSrc && IsMediaSourceURI(mLoadingSrc)) ?
+                              HTMLMediaElement::PRELOAD_ATTR_METADATA :
+                              Preferences::GetInt("media.preload.default",
+                                                  HTMLMediaElement::PRELOAD_ATTR_METADATA);
     uint32_t preloadAuto =
       Preferences::GetInt("media.preload.auto",
                           HTMLMediaElement::PRELOAD_ENOUGH);
@@ -2083,7 +2087,6 @@ HTMLMediaElement::HTMLMediaElement(already_AddRefed<mozilla::dom::NodeInfo>& aNo
     mAudioChannelFaded(false),
     mPlayingThroughTheAudioChannel(false),
     mDisableVideo(false),
-    mWaitingFor(MediaWaitingFor::None),
     mElementInTreeState(ELEMENT_NOT_INTREE)
 {
 #ifdef PR_LOGGING
@@ -3016,6 +3019,12 @@ void HTMLMediaElement::MetadataLoaded(const MediaInfo* aInfo,
   mTags = aTags.forget();
   mLoadedDataFired = false;
   ChangeReadyState(nsIDOMHTMLMediaElement::HAVE_METADATA);
+
+  if (mIsEncrypted) {
+    nsCOMPtr<nsIObserverService> obs = services::GetObserverService();
+    obs->NotifyObservers(static_cast<nsIContent*>(this), "media-eme-metadataloaded", nullptr);
+  }
+
   DispatchAsyncEvent(NS_LITERAL_STRING("durationchange"));
   if (IsVideo() && mHasVideo) {
     mMediaSize = aInfo->mVideo.mDisplay;
@@ -3246,7 +3255,10 @@ void HTMLMediaElement::CheckProgress(bool aHaveNewProgress)
 
   if (now - mDataTime >= TimeDuration::FromMilliseconds(STALL_MS)) {
     DispatchAsyncEvent(NS_LITERAL_STRING("stalled"));
-    ChangeDelayLoadStatus(false);
+
+    if (IsMediaSourceURI(mLoadingSrc)) {
+      ChangeDelayLoadStatus(false);
+    }
 
     NS_ASSERTION(mProgressTimer, "detected stalled without timer");
     // Stop timer events, which prevents repeated stalled events until there
@@ -4318,12 +4330,6 @@ HTMLMediaElement::SetMediaKeys(mozilla::dom::MediaKeys* aMediaKeys,
   }
   promise->MaybeResolve(JS::UndefinedHandleValue);
   return promise.forget();
-}
-
-MediaWaitingFor
-HTMLMediaElement::WaitingFor() const
-{
-  return mWaitingFor;
 }
 
 EventHandlerNonNull*

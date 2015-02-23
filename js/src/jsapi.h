@@ -619,15 +619,13 @@ class PerRuntimeFutexAPI
     // Release the GLOBAL lock.
     virtual void unlock() = 0;
 
-    // Return true iff the calling thread is a worker thread.  This must be
-    // used to guard calls to wait().  The lock need not be held.
-    virtual bool isOnWorkerThread() = 0;
-
     enum WakeResult {
         Woken,                  // Woken by futexWait
         Timedout,               // Woken by timeout
-        InterruptForTerminate,  // Woken by a request to terminate the worker
-        ErrorTooLong            // Implementation constraint on the timer (for now)
+        ErrorException,         // Propagate a pending exception
+        InterruptForTerminate,  // Woken by a request to terminate the worker, throw an uncatchable
+        WaitingNotAllowed,      // wait() was not allowed to block on this thread (permanently)
+        ErrorTooLong            // Implementation limit
     };
 
     // Block the thread.
@@ -1040,50 +1038,6 @@ typedef js::Vector<CompartmentTimeStats, 0, js::SystemAllocPolicy> CompartmentSt
 extern JS_PUBLIC_API(bool)
 JS_GetCompartmentStats(JSRuntime *rt, CompartmentStatsVector &stats);
 
-/*
- * Format is a string of the following characters (spaces are insignificant),
- * specifying the tabulated type conversions:
- *
- *   b      bool            Boolean
- *   c      char16_t        ECMA uint16_t, Unicode character
- *   i      int32_t         ECMA int32_t
- *   j      int32_t         ECMA int32_t (used to be different)
- *   u      uint32_t        ECMA uint32_t
- *   d      double          IEEE double
- *   I      double          Integral IEEE double
- *   S      JSString *      Unicode string, accessed by a JSString pointer
- *   W      char16_t *      Unicode character vector, 0-terminated (W for wide)
- *   o      JSObject *      Object reference
- *   f      JSFunction *    Function private
- *   v      jsval           Argument value (no conversion)
- *   *      N/A             Skip this argument (no vararg)
- *   /      N/A             End of required arguments
- *
- * The variable argument list after format must consist of &b, &c, &s, e.g.,
- * where those variables have the types given above.  For the pointer types
- * char *, JSString *, and JSObject *, the pointed-at memory returned belongs
- * to the JS runtime, not to the calling native code.  The runtime promises
- * to keep this memory valid so long as argv refers to allocated stack space
- * (so long as the native function is active).
- *
- * Fewer arguments than format specifies may be passed only if there is a /
- * in format after the last required argument specifier and argc is at least
- * the number of required arguments.  More arguments than format specifies
- * may be passed without error; it is up to the caller to deal with trailing
- * unconverted arguments.
- */
-extern JS_PUBLIC_API(bool)
-JS_ConvertArguments(JSContext *cx, const JS::CallArgs &args, const char *format, ...);
-
-#ifdef va_start
-extern JS_PUBLIC_API(bool)
-JS_ConvertArgumentsVA(JSContext *cx, const JS::CallArgs &args, const char *format,
-                      va_list ap);
-#endif
-
-extern JS_PUBLIC_API(bool)
-JS_ConvertValue(JSContext *cx, JS::HandleValue v, JSType type, JS::MutableHandleValue vp);
-
 extern JS_PUBLIC_API(bool)
 JS_ValueToObject(JSContext *cx, JS::HandleValue v, JS::MutableHandleObject objp);
 
@@ -1103,13 +1057,13 @@ extern JS_PUBLIC_API(JSType)
 JS_TypeOfValue(JSContext *cx, JS::Handle<JS::Value> v);
 
 extern JS_PUBLIC_API(bool)
-JS_StrictlyEqual(JSContext *cx, jsval v1, jsval v2, bool *equal);
+JS_StrictlyEqual(JSContext *cx, JS::Handle<JS::Value> v1, JS::Handle<JS::Value> v2, bool *equal);
 
 extern JS_PUBLIC_API(bool)
 JS_LooselyEqual(JSContext *cx, JS::Handle<JS::Value> v1, JS::Handle<JS::Value> v2, bool *equal);
 
 extern JS_PUBLIC_API(bool)
-JS_SameValue(JSContext *cx, jsval v1, jsval v2, bool *same);
+JS_SameValue(JSContext *cx, JS::Handle<JS::Value> v1, JS::Handle<JS::Value> v2, bool *same);
 
 /* True iff fun is the global eval function. */
 extern JS_PUBLIC_API(bool)
@@ -1757,16 +1711,6 @@ extern JS_PUBLIC_API(void)
 JS_SetCTypesCallbacks(JSObject *ctypesObj, const JSCTypesCallbacks *callbacks);
 #endif
 
-typedef bool
-(* JSEnumerateDiagnosticMemoryCallback)(void *ptr, size_t length);
-
-/*
- * Enumerate memory regions that contain diagnostic information
- * intended to be included in crash report minidumps.
- */
-extern JS_PUBLIC_API(void)
-JS_EnumerateDiagnosticMemoryRegions(JSEnumerateDiagnosticMemoryCallback callback);
-
 extern JS_PUBLIC_API(void *)
 JS_malloc(JSContext *cx, size_t nbytes);
 
@@ -1957,7 +1901,10 @@ typedef enum JSGCParamKey {
     JSGC_MIN_EMPTY_CHUNK_COUNT = 21,
 
     /* We never keep more than this many unused chunks in the free chunk pool. */
-    JSGC_MAX_EMPTY_CHUNK_COUNT = 22
+    JSGC_MAX_EMPTY_CHUNK_COUNT = 22,
+
+    /* Whether compacting GC is enabled. */
+    JSGC_COMPACTING_ENABLED = 23
 } JSGCParamKey;
 
 extern JS_PUBLIC_API(void)
@@ -2587,7 +2534,7 @@ JS_GetObjectRuntime(JSObject *obj);
  */
 extern JS_PUBLIC_API(JSObject *)
 JS_NewObjectWithGivenProto(JSContext *cx, const JSClass *clasp, JS::Handle<JSObject*> proto,
-                           JS::Handle<JSObject*> parent);
+                           JS::Handle<JSObject*> parent = JS::NullPtr());
 
 // Creates a new plain object, like `new Object()`, with Object.prototype as [[Prototype]].
 extern JS_PUBLIC_API(JSObject *)
@@ -2622,8 +2569,7 @@ JS_New(JSContext *cx, JS::HandleObject ctor, const JS::HandleValueArray& args);
 
 extern JS_PUBLIC_API(JSObject *)
 JS_DefineObject(JSContext *cx, JS::HandleObject obj, const char *name,
-                const JSClass *clasp = nullptr, JS::HandleObject proto = JS::NullPtr(),
-                unsigned attrs = 0);
+                const JSClass *clasp = nullptr, unsigned attrs = 0);
 
 extern JS_PUBLIC_API(bool)
 JS_DefineConstDoubles(JSContext *cx, JS::HandleObject obj, const JSConstDoubleSpec *cds);
@@ -4814,11 +4760,12 @@ JS_SetParallelParsingEnabled(JSRuntime *rt, bool enabled);
 extern JS_PUBLIC_API(void)
 JS_SetOffthreadIonCompilationEnabled(JSRuntime *rt, bool enabled);
 
-#define JIT_COMPILER_OPTIONS(Register)                                  \
-    Register(BASELINE_WARMUP_TRIGGER, "baseline.warmup.trigger")    \
-    Register(ION_WARMUP_TRIGGER, "ion.warmup.trigger")              \
-    Register(ION_ENABLE, "ion.enable")                                  \
-    Register(BASELINE_ENABLE, "baseline.enable")                        \
+#define JIT_COMPILER_OPTIONS(Register)                                     \
+    Register(BASELINE_WARMUP_TRIGGER, "baseline.warmup.trigger")           \
+    Register(ION_WARMUP_TRIGGER, "ion.warmup.trigger")                     \
+    Register(ION_GVN_ENABLE, "ion.gvn.enable")                             \
+    Register(ION_ENABLE, "ion.enable")                                     \
+    Register(BASELINE_ENABLE, "baseline.enable")                           \
     Register(OFFTHREAD_COMPILATION_ENABLE, "offthread-compilation.enable") \
     Register(SIGNALS_ENABLE, "signals.enable")
 

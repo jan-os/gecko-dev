@@ -277,8 +277,8 @@ typedef NSInteger NSEventGestureAxis;
 
 - (BOOL)isCoveringTitlebar;
 
-- (NSColor*)vibrancyFillColorForWidgetType:(uint8_t)aWidgetType;
-- (NSColor*)vibrancyFontSmoothingBackgroundColorForWidgetType:(uint8_t)aWidgetType;
+- (NSColor*)vibrancyFillColorForThemeGeometryType:(nsITheme::ThemeGeometryType)aThemeGeometryType;
+- (NSColor*)vibrancyFontSmoothingBackgroundColorForThemeGeometryType:(nsITheme::ThemeGeometryType)aThemeGeometryType;
 
 // Simple gestures support
 //
@@ -355,7 +355,6 @@ public:
   NS_IMETHOD              Create(nsIWidget *aParent,
                                  nsNativeWidget aNativeParent,
                                  const nsIntRect &aRect,
-                                 nsDeviceContext *aContext,
                                  nsWidgetInitData *aInitData = nullptr) MOZ_OVERRIDE;
 
   NS_IMETHOD              Destroy() MOZ_OVERRIDE;
@@ -401,7 +400,7 @@ public:
 
   virtual void*           GetNativeData(uint32_t aDataType) MOZ_OVERRIDE;
   virtual nsresult        ConfigureChildren(const nsTArray<Configuration>& aConfigurations) MOZ_OVERRIDE;
-  virtual nsIntPoint      WidgetToScreenOffset() MOZ_OVERRIDE;
+  virtual mozilla::LayoutDeviceIntPoint WidgetToScreenOffset() MOZ_OVERRIDE;
   virtual bool            ShowsResizeIndicator(nsIntRect* aResizerRect) MOZ_OVERRIDE;
 
   static  bool            ConvertStatus(nsEventStatus aStatus)
@@ -454,11 +453,11 @@ public:
                                             const nsAString& aCharacters,
                                             const nsAString& aUnmodifiedCharacters) MOZ_OVERRIDE;
 
-  virtual nsresult SynthesizeNativeMouseEvent(nsIntPoint aPoint,
+  virtual nsresult SynthesizeNativeMouseEvent(mozilla::LayoutDeviceIntPoint aPoint,
                                               uint32_t aNativeMessage,
                                               uint32_t aModifierFlags) MOZ_OVERRIDE;
 
-  virtual nsresult SynthesizeNativeMouseMove(nsIntPoint aPoint) MOZ_OVERRIDE
+  virtual nsresult SynthesizeNativeMouseMove(mozilla::LayoutDeviceIntPoint aPoint) MOZ_OVERRIDE
   { return SynthesizeNativeMouseEvent(aPoint, NSMouseMoved, 0); }
 
   // Mac specific methods
@@ -502,8 +501,8 @@ public:
   }
 
   void              ClearVibrantAreas();
-  NSColor*          VibrancyFillColorForWidgetType(uint8_t aWidgetType);
-  NSColor*          VibrancyFontSmoothingBackgroundColorForWidgetType(uint8_t aWidgetType);
+  NSColor*          VibrancyFillColorForThemeGeometryType(nsITheme::ThemeGeometryType aThemeGeometryType);
+  NSColor*          VibrancyFontSmoothingBackgroundColorForThemeGeometryType(nsITheme::ThemeGeometryType aThemeGeometryType);
 
   // unit conversion convenience functions
   int32_t           CocoaPointsToDevPixels(CGFloat aPts) const {

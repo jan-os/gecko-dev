@@ -176,7 +176,7 @@ PL_NewDHashTable(const PLDHashTableOps* aOps, uint32_t aEntrySize,
   if (!table) {
     return nullptr;
   }
-  if (!PL_DHashTableInit(table, aOps, aEntrySize, fallible_t(), aLength)) {
+  if (!PL_DHashTableInit(table, aOps, aEntrySize, fallible, aLength)) {
     free(table);
     return nullptr;
   }
@@ -276,7 +276,7 @@ void
 PL_DHashTableInit(PLDHashTable* aTable, const PLDHashTableOps* aOps,
                   uint32_t aEntrySize, uint32_t aLength)
 {
-  if (!PL_DHashTableInit(aTable, aOps, aEntrySize, fallible_t(), aLength)) {
+  if (!PL_DHashTableInit(aTable, aOps, aEntrySize, fallible, aLength)) {
     if (aLength > PL_DHASH_MAX_INITIAL_LENGTH) {
       MOZ_CRASH();          // the asked-for length was too big
     }
@@ -356,9 +356,14 @@ PL_DHashTableFinish(PLDHashTable* aTable)
   aTable->Finish();
 }
 
+// If |IsAdd| is true, the return value is always non-null and it may be a
+// previously-removed entry. If |IsAdd| is false, the return value is null on a
+// miss, and will never be a previously-removed entry on a hit. This
+// distinction is a bit grotty but this function is hot enough that these
+// differences are worthwhile.
+template <PLDHashTable::SearchReason Reason>
 PLDHashEntryHdr* PL_DHASH_FASTCALL
-PLDHashTable::SearchTable(const void* aKey, PLDHashNumber aKeyHash,
-                          bool aIsAdd)
+PLDHashTable::SearchTable(const void* aKey, PLDHashNumber aKeyHash)
 {
   METER(mStats.mSearches++);
   NS_ASSERTION(!(aKeyHash & COLLISION_FLAG),
@@ -371,7 +376,7 @@ PLDHashTable::SearchTable(const void* aKey, PLDHashNumber aKeyHash,
   /* Miss: return space for a new entry. */
   if (EntryIsFree(entry)) {
     METER(mStats.mMisses++);
-    return entry;
+    return (Reason == ForAdd) ? entry : nullptr;
   }
 
   /* Hit: return entry. */
@@ -387,16 +392,19 @@ PLDHashTable::SearchTable(const void* aKey, PLDHashNumber aKeyHash,
   PLDHashNumber hash2 = HASH2(aKeyHash, sizeLog2, mHashShift);
   uint32_t sizeMask = (1u << sizeLog2) - 1;
 
-  /* Save the first removed entry pointer so Add() can recycle it. */
+  /*
+   * Save the first removed entry pointer so Add() can recycle it. (Only used
+   * if Reason==ForAdd.)
+   */
   PLDHashEntryHdr* firstRemoved = nullptr;
 
   for (;;) {
-    if (MOZ_UNLIKELY(ENTRY_IS_REMOVED(entry))) {
-      if (!firstRemoved) {
-        firstRemoved = entry;
-      }
-    } else {
-      if (aIsAdd) {
+    if (Reason == ForAdd) {
+      if (MOZ_UNLIKELY(ENTRY_IS_REMOVED(entry))) {
+        if (!firstRemoved) {
+          firstRemoved = entry;
+        }
+      } else {
         entry->mKeyHash |= COLLISION_FLAG;
       }
     }
@@ -408,7 +416,8 @@ PLDHashTable::SearchTable(const void* aKey, PLDHashNumber aKeyHash,
     entry = ADDRESS_ENTRY(this, hash1);
     if (EntryIsFree(entry)) {
       METER(mStats.mMisses++);
-      return (firstRemoved && aIsAdd) ? firstRemoved : entry;
+      return (Reason == ForAdd) ? (firstRemoved ? firstRemoved : entry)
+                                : nullptr;
     }
 
     if (MATCH_ENTRY_KEYHASH(entry, aKeyHash) &&
@@ -553,15 +562,15 @@ PLDHashTable::Search(const void* aKey)
   METER(mStats.mSearches++);
 
   PLDHashNumber keyHash = ComputeKeyHash(aKey);
-  PLDHashEntryHdr* entry = SearchTable(aKey, keyHash, /* isAdd = */ false);
+  PLDHashEntryHdr* entry = SearchTable<ForSearchOrRemove>(aKey, keyHash);
 
   DECREMENT_RECURSION_LEVEL(this);
 
-  return !EntryIsFree(entry) ? entry : nullptr;
+  return entry;
 }
 
 MOZ_ALWAYS_INLINE PLDHashEntryHdr*
-PLDHashTable::Add(const void* aKey)
+PLDHashTable::Add(const void* aKey, const mozilla::fallible_t&)
 {
   PLDHashNumber keyHash;
   PLDHashEntryHdr* entry;
@@ -604,7 +613,7 @@ PLDHashTable::Add(const void* aKey)
    * then skip it while growing the table and re-add it after.
    */
   keyHash = ComputeKeyHash(aKey);
-  entry = SearchTable(aKey, keyHash, /* isAdd = */ true);
+  entry = SearchTable<ForAdd>(aKey, keyHash);
   if (!ENTRY_IS_LIVE(entry)) {
     /* Initialize the entry, indicating that it's no longer free. */
     METER(mStats.mAddMisses++);
@@ -613,11 +622,8 @@ PLDHashTable::Add(const void* aKey)
       mRemovedCount--;
       keyHash |= COLLISION_FLAG;
     }
-    if (mOps->initEntry && !mOps->initEntry(this, entry, aKey)) {
-      /* We haven't claimed entry yet; fail with null return. */
-      memset(entry + 1, 0, mEntrySize - sizeof(*entry));
-      entry = nullptr;
-      goto exit;
+    if (mOps->initEntry) {
+      mOps->initEntry(entry, aKey);
     }
     entry->mKeyHash = keyHash;
     mEntryCount++;
@@ -638,8 +644,8 @@ PLDHashTable::Remove(const void* aKey)
   INCREMENT_RECURSION_LEVEL(this);
 
   PLDHashNumber keyHash = ComputeKeyHash(aKey);
-  PLDHashEntryHdr* entry = SearchTable(aKey, keyHash, /* isAdd = */ false);
-  if (ENTRY_IS_LIVE(entry)) {
+  PLDHashEntryHdr* entry = SearchTable<ForSearchOrRemove>(aKey, keyHash);
+  if (entry) {
     /* Clear this entry and mark it as "removed". */
     METER(mStats.mRemoveHits++);
     PL_DHashTableRawRemove(this, entry);
@@ -666,9 +672,21 @@ PL_DHashTableSearch(PLDHashTable* aTable, const void* aKey)
 }
 
 PLDHashEntryHdr* PL_DHASH_FASTCALL
+PL_DHashTableAdd(PLDHashTable* aTable, const void* aKey,
+                 const fallible_t& aFallible)
+{
+  return aTable->Add(aKey, aFallible);
+}
+
+PLDHashEntryHdr* PL_DHASH_FASTCALL
 PL_DHashTableAdd(PLDHashTable* aTable, const void* aKey)
 {
-  return aTable->Add(aKey);
+  PLDHashEntryHdr* entry = PL_DHashTableAdd(aTable, aKey, fallible);
+  if (!entry) {
+    // Entry storage reallocation failed.
+    NS_ABORT_OOM(aTable->EntrySize() * aTable->EntryCount());
+  }
+  return entry;
 }
 
 void PL_DHASH_FASTCALL

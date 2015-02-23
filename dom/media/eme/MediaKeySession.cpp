@@ -36,7 +36,8 @@ NS_IMPL_RELEASE_INHERITED(MediaKeySession, DOMEventTargetHelper)
 // unique token.
 static uint32_t sMediaKeySessionNum = 0;
 
-MediaKeySession::MediaKeySession(nsPIDOMWindow* aParent,
+MediaKeySession::MediaKeySession(JSContext* aCx,
+                                 nsPIDOMWindow* aParent,
                                  MediaKeys* aKeys,
                                  const nsAString& aKeySystem,
                                  SessionType aSessionType,
@@ -48,9 +49,12 @@ MediaKeySession::MediaKeySession(nsPIDOMWindow* aParent,
   , mToken(sMediaKeySessionNum++)
   , mIsClosed(false)
   , mUninitialized(true)
-  , mKeyStatusMap(new MediaKeyStatusMap(aParent))
+  , mKeyStatusMap(new MediaKeyStatusMap(aCx, aParent, aRv))
 {
   MOZ_ASSERT(aParent);
+  if (aRv.Failed()) {
+    return;
+  }
   mClosed = mKeys->MakePromise(aRv);
 }
 
@@ -296,7 +300,7 @@ MediaKeySession::DispatchKeyError(uint32_t aSystemCode)
 }
 
 void
-MediaKeySession::DispatchKeysChange()
+MediaKeySession::DispatchKeyStatusesChange()
 {
   if (IsClosed()) {
     return;
@@ -305,7 +309,7 @@ MediaKeySession::DispatchKeysChange()
   UpdateKeyStatusMap();
 
   nsRefPtr<AsyncEventDispatcher> asyncDispatcher =
-    new AsyncEventDispatcher(this, NS_LITERAL_STRING("keyschange"), false);
+    new AsyncEventDispatcher(this, NS_LITERAL_STRING("keystatuseschange"), false);
   asyncDispatcher->PostDOMEvent();
 }
 

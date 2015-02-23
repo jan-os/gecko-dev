@@ -257,6 +257,7 @@ class Assembler : public AssemblerX86Shared
     using AssemblerX86Shared::jmp;
     using AssemblerX86Shared::push;
     using AssemblerX86Shared::pop;
+    using AssemblerX86Shared::vmovq;
 
     static uint8_t *PatchableJumpAddress(JitCode *code, size_t index);
     static void PatchJumpEntry(uint8_t *entry, uint8_t *target);
@@ -409,6 +410,22 @@ class Assembler : public AssemblerX86Shared
 
     void xchgq(Register src, Register dest) {
         masm.xchgq_rr(src.code(), dest.code());
+    }
+
+    void movslq(Register src, Register dest) {
+        masm.movslq_rr(src.code(), dest.code());
+    }
+    void movslq(const Operand &src, Register dest) {
+        switch (src.kind()) {
+          case Operand::MEM_REG_DISP:
+            masm.movslq_mr(src.disp(), src.base(), dest.code());
+            break;
+          case Operand::MEM_SCALE:
+            masm.movslq_mr(src.disp(), src.base(), src.index(), src.scale(), dest.code());
+            break;
+          default:
+            MOZ_CRASH("unexpected operand kind");
+        }
     }
 
     void andq(Register src, Register dest) {

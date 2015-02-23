@@ -119,6 +119,7 @@
 #include "nsISpellChecker.h"
 #include "nsIStyleSheet.h"
 #include "nsISupportsPrimitives.h"
+#include "nsISystemMessagesInternal.h"
 #include "nsITimer.h"
 #include "nsIURIFixup.h"
 #include "nsIWindowWatcher.h"
@@ -662,7 +663,7 @@ ContentParent::GetNewOrPreallocatedAppProcess(mozIApplication* aApp,
         if (!process->SetPriorityAndCheckIsAlive(aInitialPriority)) {
             // Kill the process just in case it's not actually dead; we don't want
             // to "leak" this process!
-            process->KillHard();
+            process->KillHard("GetNewOrPreallocatedAppProcess");
         }
         else {
             nsAutoString manifestURL;
@@ -954,7 +955,7 @@ ContentParent::RecvBridgeToChildProcess(const ContentParentId& aCpId)
     }
 
     // You can't bridge to a process you didn't open!
-    KillHard();
+    KillHard("BridgeToChildProcess");
     return false;
 }
 
@@ -1075,7 +1076,7 @@ ContentParent::CreateBrowserOrApp(const TabContext& aContext,
                 constructorSender->ChildID(),
                 constructorSender->IsForApp(),
                 constructorSender->IsForBrowser());
-            return static_cast<TabParent*>(browser);
+            return TabParent::GetFrom(browser);
         }
         return nullptr;
     }
@@ -1189,7 +1190,7 @@ ContentParent::CreateBrowserOrApp(const TabContext& aContext,
 
     if (isInContentProcess) {
         // Just return directly without the following check in content process.
-        return static_cast<TabParent*>(browser);
+        return TabParent::GetFrom(browser);
     }
 
     if (!browser) {
@@ -1197,7 +1198,7 @@ ContentParent::CreateBrowserOrApp(const TabContext& aContext,
         // other process has already died.
         if (!reused) {
             // Don't leave a broken ContentParent in the hashtable.
-            parent->AsContentParent()->KillHard();
+            parent->AsContentParent()->KillHard("CreateBrowserOrApp");
             sAppContentParents->Remove(manifestURL);
             parent = nullptr;
         }
@@ -1218,7 +1219,7 @@ ContentParent::CreateBrowserOrApp(const TabContext& aContext,
 
     parent->AsContentParent()->MaybeTakeCPUWakeLock(aFrameElement);
 
-    return static_cast<TabParent*>(browser);
+    return TabParent::GetFrom(browser);
 }
 
 /*static*/ ContentBridgeParent*
@@ -1324,11 +1325,21 @@ ContentParent::ForwardKnownInfo()
 #ifdef MOZ_WIDGET_GONK
     InfallibleTArray<VolumeInfo> volumeInfo;
     nsRefPtr<nsVolumeService> vs = nsVolumeService::GetSingleton();
-    if (vs) {
+    if (vs && !mIsForBrowser) {
         vs->GetVolumesForIPC(&volumeInfo);
         unused << SendVolumes(volumeInfo);
     }
 #endif /* MOZ_WIDGET_GONK */
+
+    nsCOMPtr<nsISystemMessagesInternal> systemMessenger =
+        do_GetService("@mozilla.org/system-message-internal;1");
+    if (systemMessenger && !mIsForBrowser) {
+        nsCOMPtr<nsIURI> manifestURI;
+        nsresult rv = NS_NewURI(getter_AddRefs(manifestURI), mAppManifestURL);
+        if (NS_SUCCEEDED(rv)) {
+            systemMessenger->RefreshCache(mMessageManager, manifestURI);
+        }
+    }
 }
 
 namespace {
@@ -1581,7 +1592,7 @@ ContentParent::ShutDownProcess(ShutDownMethod aMethod)
         // Kill Nuwa process forcibly to break its IPC channels and finalize
         // corresponding parents.
         if (IsNuwaProcess()) {
-            KillHard();
+            KillHard("ShutDownProcess");
         }
 #endif
     }
@@ -1739,14 +1750,13 @@ ContentParent::OnChannelConnected(int32_t pid)
 }
 
 void
-ContentParent::ProcessingError(Result what)
+ContentParent::ProcessingError(Result aCode, const char* aReason)
 {
-    if (MsgDropped == what) {
-        // Messages sent after crashes etc. are not a big deal.
+    if (MsgDropped == aCode) {
         return;
     }
     // Other errors are big deals.
-    KillHard();
+    KillHard(aReason);
 }
 
 typedef std::pair<ContentParent*, std::set<uint64_t> > IDPair;
@@ -1786,7 +1796,7 @@ ContentParent::RecvDeallocateLayerTreeId(const uint64_t& aId)
         CompositorParent::DeallocateLayerTreeId(aId);
     } else {
         // You can't deallocate layer tree ids that you didn't allocate
-        KillHard();
+        KillHard("DeallocateLayerTreeId");
     }
     return true;
 }
@@ -2368,7 +2378,7 @@ ContentParent::InitInternal(ProcessPriority aInitialPriority,
     }
 #endif
     if (shouldSandbox && !SendSetProcessSandbox()) {
-        KillHard();
+        KillHard("SandboxInitFailed");
     }
 #endif
 }
@@ -2426,12 +2436,12 @@ ContentParent::RecvReadPermissions(InfallibleTArray<IPC::Permission>* aPermissio
         services::GetPermissionManager();
     nsPermissionManager* permissionManager =
         static_cast<nsPermissionManager*>(permissionManagerIface.get());
-    NS_ABORT_IF_FALSE(permissionManager,
-                 "We have no permissionManager in the Chrome process !");
+    MOZ_ASSERT(permissionManager,
+               "We have no permissionManager in the Chrome process !");
 
     nsCOMPtr<nsISimpleEnumerator> enumerator;
     DebugOnly<nsresult> rv = permissionManager->GetEnumerator(getter_AddRefs(enumerator));
-    NS_ABORT_IF_FALSE(NS_SUCCEEDED(rv), "Could not get enumerator!");
+    MOZ_ASSERT(NS_SUCCEEDED(rv), "Could not get enumerator!");
     while(1) {
         bool hasMore;
         enumerator->HasMoreElements(&hasMore);
@@ -2711,7 +2721,7 @@ ContentParent::RecvNuwaReady()
                 "Terminating child process %d for unauthorized IPC message: NuwaReady",
                 Pid()).get());
 
-        KillHard();
+        KillHard("NuwaReady");
         return false;
     }
     sNuwaReady = true;
@@ -2747,7 +2757,7 @@ ContentParent::RecvAddNewProcess(const uint32_t& aPid,
                 "Terminating child process %d for unauthorized IPC message: "
                 "AddNewProcess(%d)", Pid(), aPid).get());
 
-        KillHard();
+        KillHard("AddNewProcess");
         return false;
     }
     nsRefPtr<ContentParent> content;
@@ -3231,11 +3241,11 @@ ContentParent::DeallocPRemoteSpellcheckEngineParent(PRemoteSpellcheckEngineParen
 ContentParent::ForceKillTimerCallback(nsITimer* aTimer, void* aClosure)
 {
     auto self = static_cast<ContentParent*>(aClosure);
-    self->KillHard();
+    self->KillHard("ShutDownKill");
 }
 
 void
-ContentParent::KillHard()
+ContentParent::KillHard(const char* aReason)
 {
     // On Windows, calling KillHard multiple times causes problems - the
     // process handle becomes invalid on the first call, causing a second call
@@ -3268,6 +3278,15 @@ ContentParent::KillHard()
             crashReporter->AnnotateCrashReport(
                 NS_LITERAL_CSTRING("additional_minidumps"),
                 additionalDumps);
+            if (IsKillHardAnnotationSet()) {
+              crashReporter->AnnotateCrashReport(
+                  NS_LITERAL_CSTRING("kill_hard"),
+                  GetKillHardAnnotation());
+            }
+            nsDependentCString reason(aReason);
+            crashReporter->AnnotateCrashReport(
+                NS_LITERAL_CSTRING("ipc_channel_error"),
+                reason);
         }
     }
 #endif
@@ -4211,7 +4230,7 @@ ContentParent::CheckAppHasStatus(unsigned short aStatus)
 bool
 ContentParent::KillChild()
 {
-  KillHard();
+  KillHard("KillChild");
   return true;
 }
 
@@ -4417,8 +4436,8 @@ ContentParent::RecvBackUpXResources(const FileDescriptor& aXSocketFd)
 #ifndef MOZ_X11
     NS_RUNTIMEABORT("This message only makes sense on X11 platforms");
 #else
-    NS_ABORT_IF_FALSE(0 > mChildXSocketFdDup.get(),
-                      "Already backed up X resources??");
+    MOZ_ASSERT(0 > mChildXSocketFdDup.get(),
+               "Already backed up X resources??");
     mChildXSocketFdDup.forget();
     if (aXSocketFd.IsValid()) {
         mChildXSocketFdDup.reset(aXSocketFd.PlatformHandle());
