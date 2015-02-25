@@ -14,7 +14,7 @@ interface MozOs : EventTarget {
   Promise<void> appendFile(DOMString path, (Uint8Array or DOMString) data, optional DOMString encoding = "binary");
   Promise<void> createDirectory(DOMString path, optional boolean ignoreExisting = true);
   
-  Promise<MozOsFile> openFile(DOMString path, optional object mode, optional object options);
+  Promise<MozOsFile> openFile(DOMString path, optional DOMString mode, optional object options);
 };
 
 [JSImplementation="@mozilla.org/b2g-os-exec-response;1"]
