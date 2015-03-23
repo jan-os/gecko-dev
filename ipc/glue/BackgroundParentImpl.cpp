@@ -21,6 +21,7 @@
 #include "mozilla/dom/cache/ActorUtils.h"
 #include "mozilla/dom/indexedDB/ActorsParent.h"
 #include "mozilla/dom/ipc/BlobParent.h"
+#include "mozilla/dom/os/OsFileChannelParent.h"
 #include "mozilla/ipc/BackgroundParent.h"
 #include "mozilla/ipc/BackgroundUtils.h"
 #include "mozilla/ipc/PBackgroundSharedTypes.h"
@@ -615,7 +616,6 @@ BackgroundParentImpl::AllocPMessagePortParent(const nsID& aUUID,
 {
   AssertIsInMainProcess();
   AssertIsOnBackgroundThread();
-
   return new MessagePortParent(aUUID);
 }
 
@@ -675,6 +675,26 @@ BackgroundParentImpl::DeallocPAsmJSCacheEntryParent(
   AssertIsOnBackgroundThread();
 
   dom::asmjscache::DeallocEntryParent(aActor);
+  return true;
+}
+
+dom::os::POsFileChannelParent*
+BackgroundParentImpl::AllocPOsFileChannelParent()
+{
+  AssertIsInMainProcess();
+  AssertIsOnBackgroundThread();
+
+  return new dom::os::OsFileChannelParent();
+}
+
+bool
+BackgroundParentImpl::DeallocPOsFileChannelParent(dom::os::POsFileChannelParent* aActor)
+{
+  AssertIsInMainProcess();
+  AssertIsOnBackgroundThread();
+  MOZ_ASSERT(aActor);
+
+  delete static_cast<dom::os::OsFileChannelParent*>(aActor);
   return true;
 }
 

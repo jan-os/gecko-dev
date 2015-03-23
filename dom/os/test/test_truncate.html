@@ -1,0 +1,107 @@
+<!DOCTYPE HTML>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>os truncate test</title>
+  <script type="text/javascript" src="/tests/SimpleTest/SimpleTest.js"></script>
+  <link rel="stylesheet" type="text/css" href="/tests/SimpleTest/test.css" />
+</head>
+<body>
+  <a target="_blank" href="https://bugzilla.mozilla.org/show_bug.cgi?id=1141021">os tests</a>
+  <p id="display"></p>
+  <div id="content" style="display: none"></div>
+  <pre id="test"></pre>
+
+  <script>
+  var jsFuns = SpecialPowers.Cu.getJSTestingFunctions();
+
+  function runTest() {
+    return new Promise((res, rej) => {
+      var workerCode = `
+        try {
+          var path = navigator.os.TEMP_DIR + '/test_truncate';
+          try {
+            navigator.os.unlink(path);
+          }
+          catch (ex) {}
+
+          function writeFile(data) {
+            var file = navigator.os.open(path, navigator.os.RDWR | navigator.os.CREAT, 0666);
+            var arr = new Uint8Array(data.split('').map(c => c.charCodeAt(0)));
+            navigator.os.write(file, arr);
+            navigator.os.close(file);
+          }
+          function readFile() {
+            var file = navigator.os.open(path,
+              navigator.os.RDONLY, navigator.os.IREAD);
+            var data = navigator.os.read(file, 1000);
+            navigator.os.close(file);
+            return Array.apply(null, data);
+          }
+
+          writeFile('This is test');
+          navigator.os.truncate(path, 4);
+          var data1 = readFile();
+          navigator.os.unlink(path);
+
+          writeFile('Moar test');
+          var file = navigator.os.open(path, navigator.os.RDWR);
+          navigator.os.ftruncate(file, 0);
+          navigator.os.close(file);
+          var data2 = readFile();
+          navigator.os.unlink(path);
+
+          writeFile('Short');
+          navigator.os.truncate(path, 8);
+          var data3 = readFile();
+          navigator.os.unlink(path);
+
+          postMessage(JSON.stringify({
+            data1: data1,
+            data2: data2,
+            data3: data3
+          }));
+        }
+        catch (ex) {
+          postMessage("truncate err: " + ex);
+        }
+        `;
+
+      var workerBlob = new Blob([workerCode], { type: 'application/javascript' });
+      var w = new Worker(URL.createObjectURL(workerBlob));
+
+      w.onmessage = e => {
+        is(e.data.indexOf('truncate err'), -1, 'ran successfully');
+        if (e.data.indexOf('truncate err') !== -1) {
+          dump(e.data + '\n');
+          return res();
+        }
+
+        try {
+          var data = JSON.parse(e.data);
+        }
+        catch(ex) {
+          ok(false, 'is valid JSON (' + e.data + ')');
+          return res();
+        }
+
+        is(data.data1.join(','), 'This'.split('').map(c=>c.charCodeAt(0)).join(','), 'data1');
+        is(data.data2.join(','), '', 'data2');
+        is(data.data3.join(','), 'Short\0\0\0'.split('').map(c=>c.charCodeAt(0)).join(','), 'data3');
+
+        res();
+      };
+    });
+  }
+
+  SimpleTest.waitForExplicitFinish();
+
+  SpecialPowers.pushPrefEnv({"set":[["dom.os.security.disabled", true]]},
+    Promise.all([
+      runTest()
+    ]).then(() => {
+      SimpleTest.finish();
+    }));
+  </script>
+</body>
+</html>

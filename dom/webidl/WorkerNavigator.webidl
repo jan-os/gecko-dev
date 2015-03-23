@@ -11,3 +11,9 @@ WorkerNavigator implements NavigatorID;
 WorkerNavigator implements NavigatorLanguage;
 WorkerNavigator implements NavigatorOnLine;
 WorkerNavigator implements NavigatorDataStore;
+
+// Mozilla extensions
+partial interface WorkerNavigator {
+    [Throws]
+    readonly attribute OsManager? os;
+};

@@ -1,0 +1,91 @@
+<!DOCTYPE HTML>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>os write test</title>
+  <script type="text/javascript" src="/tests/SimpleTest/SimpleTest.js"></script>
+  <link rel="stylesheet" type="text/css" href="/tests/SimpleTest/test.css" />
+</head>
+<body>
+  <a target="_blank" href="https://bugzilla.mozilla.org/show_bug.cgi?id=1141021">os tests</a>
+  <p id="display"></p>
+  <div id="content" style="display: none"></div>
+  <pre id="test"></pre>
+
+  <script>
+  var jsFuns = SpecialPowers.Cu.getJSTestingFunctions();
+
+  function runTest(expected) {
+    return new Promise((res, rej) => {
+      var workerCode = `
+        try {
+          var path = navigator.os.TEMP_DIR + '/test_writefile';
+          var file = navigator.os.open(path,
+            navigator.os.RDWR | navigator.os.CREAT, 0666);
+          var arr = new Uint8Array("` + expected + `".split('').map(c => c.charCodeAt(0)));
+          var written = navigator.os.write(file, arr);
+          navigator.os.close(file);
+
+          file = navigator.os.open(path, navigator.os.RDONLY, navigator.os.IREAD);
+          var data = navigator.os.read(file, 200);
+          navigator.os.close(file);
+
+          var open2err = null;
+          try {
+            var open2 = navigator.os.open('/non/existing/path', navigator.os.RDWR, 0666);
+          }
+          catch (ex) {
+            open2err = ex;
+          }
+
+          postMessage(JSON.stringify({
+            data: data.join(','),
+            written: written,
+            open2: open2,
+            open2err: open2err
+          }));
+        }
+        catch (ex) {
+          postMessage("write err: " + ex);
+        }
+        `;
+
+      var workerBlob = new Blob([workerCode], { type: 'application/javascript' });
+      var w = new Worker(URL.createObjectURL(workerBlob));
+
+      w.onmessage = e => {
+        is(e.data.indexOf('write err'), -1, 'ran successfully');
+        if (e.data.indexOf('write err') !== -1) {
+          dump(e.data + '\n');
+          return res();
+        }
+
+        try {
+          var data = JSON.parse(e.data);
+        }
+        catch(ex) {
+          ok(false, fn + ' is valid JSON');
+        }
+
+        is(data.written, expected.length, 'written');
+        var expectedData = expected.split('').map(c=>c.charCodeAt(0)).join(',');
+        is(data.data, expectedData, 'data');
+        is(data.open2, undefined, 'open2');
+        is(data.open2err, 'No such file or directory', 'open2err');
+
+        res();
+      };
+    });
+  }
+
+  SimpleTest.waitForExplicitFinish();
+
+  SpecialPowers.pushPrefEnv({"set":[["dom.os.security.disabled", true]]},
+    Promise.all([
+      runTest('Hello world')
+    ]).then(() => {
+      SimpleTest.finish();
+    }));
+  </script>
+</body>
+</html>

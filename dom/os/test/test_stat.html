@@ -1,0 +1,106 @@
+<!DOCTYPE HTML>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>os stat test</title>
+  <script type="text/javascript" src="/tests/SimpleTest/SimpleTest.js"></script>
+  <link rel="stylesheet" type="text/css" href="/tests/SimpleTest/test.css" />
+</head>
+<body>
+  <a target="_blank" href="https://bugzilla.mozilla.org/show_bug.cgi?id=1141021">os tests</a>
+  <p id="display"></p>
+  <div id="content" style="display: none"></div>
+  <pre id="test"></pre>
+
+  <script>
+  var jsFuns = SpecialPowers.Cu.getJSTestingFunctions();
+
+  // /Volumes/repos/gecko-dev/obj-x86_64-apple-darwin14.0.0/_tests/testing/mochitest
+  function runTest() {
+    return new Promise((res, rej) => {
+      var workerCode = `
+        try {
+          var stat1 = navigator.os.stat("../../../../dom/os/test/payload.txt");
+          var stat2 = navigator.os.lstat("../../../../dom/os/test/payload.txt");
+
+          var fd = navigator.os.open("../../../../dom/os/test/payload.txt",
+            navigator.os.RDONLY, navigator.os.IREAD);
+          var stat3 = navigator.os.fstat(fd);
+          navigator.os.close(fd);
+
+          var stat4, stat5;
+          try {
+            navigator.os.stat("/completely/non/existing/file");
+          }
+          catch (ex) {
+            stat4 = ex;
+          }
+          try {
+            navigator.os.stat("../completely/non/existing");
+          }
+          catch (ex) {
+            stat5 = ex;
+          }
+
+          var data = [stat1, stat2, stat3].map(function(stat) {
+            return {
+              mode: stat.mode,
+              isFile: stat.isFile(),
+              isDir: stat.isDirectory()
+            };
+          });
+
+          data[3] = stat4;
+          data[4] = stat5;
+
+          postMessage(JSON.stringify(data));
+        }
+        catch (ex) {
+          postMessage("stat err: " + ex);
+        }
+        `;
+
+      var workerBlob = new Blob([workerCode], { type: 'application/javascript' });
+      var w = new Worker(URL.createObjectURL(workerBlob));
+
+      w.onmessage = e => {
+        is(e.data.indexOf('stat err'), -1, 'ran successfully');
+        if (e.data.indexOf('stat err') > -1) {
+          dump('Failed to run: ' + e.data + '\n');
+          return res();
+        }
+
+        try {
+          var data = JSON.parse(e.data);
+        }
+        catch(ex) {
+          ok(false, 'is valid JSON');
+          return res();
+        }
+
+        for (var i = 0; i < 3; i++) {
+          is((data[i].mode & 0170000), 0100000, i + ' isFile');
+          isnot((data[i].mode & 0170000), 0040000, i + ' isDir');
+          is(data[i].isFile, true, i + ' isFile2');
+          is(data[i].isDir, false, i + ' isDir2');
+        }
+
+        is(data[3], 'No such file or directory', 'stat4');
+        is(data[4], 'No such file or directory', 'stat5');
+
+        res();
+      };
+    });
+  }
+
+  SimpleTest.waitForExplicitFinish();
+
+  SpecialPowers.pushPrefEnv({"set":[["dom.os.security.disabled", true]]},
+    Promise.all([
+      runTest()
+    ]).then(() => {
+      SimpleTest.finish();
+    }));
+  </script>
+</body>
+</html>

@@ -20,6 +20,7 @@
 #include "mozilla/dom/ipc/BlobChild.h"
 #include "mozilla/dom/MessagePortChild.h"
 #include "mozilla/dom/NuwaChild.h"
+#include "mozilla/dom/os/OsFileChannelChild.h"
 #include "mozilla/ipc/PBackgroundTestChild.h"
 #include "mozilla/layout/VsyncChild.h"
 #include "mozilla/net/PUDPSocketChild.h"
@@ -242,6 +243,26 @@ BackgroundChildImpl::DeallocPUDPSocketChild(PUDPSocketChild* child)
 
   UDPSocketChild* p = static_cast<UDPSocketChild*>(child);
   p->ReleaseIPDLReference();
+  return true;
+}
+
+BackgroundChildImpl::POsFileChannelChild*
+BackgroundChildImpl::AllocPOsFileChannelChild()
+{
+  nsRefPtr<dom::os::OsFileChannelChild> actor = new dom::os::OsFileChannelChild();
+  // There still has one ref-count after return, and it will be released in
+  // DeallocPOsFileChannelChild().
+  return actor.forget().take();
+}
+
+bool
+BackgroundChildImpl::DeallocPOsFileChannelChild(POsFileChannelChild* aActor)
+{
+  MOZ_ASSERT(aActor);
+
+  // This actor already has one ref-count. Please check AllocPOsFileChannelChild().
+  nsRefPtr<dom::os::OsFileChannelChild> actor =
+      dont_AddRef(static_cast<dom::os::OsFileChannelChild*>(aActor));
   return true;
 }
 

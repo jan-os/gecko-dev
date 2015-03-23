@@ -8,6 +8,7 @@
 
 #include "mozilla/dom/DataStore.h"
 #include "mozilla/dom/DataStoreBinding.h"
+#include "mozilla/dom/os/OsManager.h"
 #include "mozilla/dom/Promise.h"
 #include "mozilla/dom/PromiseWorkerProxy.h"
 #include "mozilla/dom/WorkerNavigatorBinding.h"
@@ -392,6 +393,20 @@ WorkerNavigator::GetUserAgent(nsString& aUserAgent) const
   if (!runnable->Dispatch(workerPrivate->GetJSContext())) {
     JS_ReportPendingException(workerPrivate->GetJSContext());
   }
+}
+
+already_AddRefed<os::OsManager>
+WorkerNavigator::GetOs(ErrorResult& aRv)
+{
+  if (!mOsManager) {
+    WorkerPrivate* workerPrivate = GetCurrentThreadWorkerPrivate();
+    MOZ_ASSERT(workerPrivate);
+
+    mOsManager = new os::OsManager(workerPrivate);
+    mOsManager->Init(aRv);
+  }
+
+  return mOsManager.forget();
 }
 
 END_WORKERS_NAMESPACE

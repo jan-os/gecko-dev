@@ -344,6 +344,7 @@ WEBIDL_FILES = [
     'OfflineAudioContext.webidl',
     'OfflineResourceList.webidl',
     'OscillatorNode.webidl',
+    'OsManager.webidl',
     'PaintRequest.webidl',
     'PaintRequestList.webidl',
     'PannerNode.webidl',

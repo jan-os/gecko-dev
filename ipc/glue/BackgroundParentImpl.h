@@ -165,6 +165,12 @@ protected:
 
   virtual bool
   DeallocPAsmJSCacheEntryParent(PAsmJSCacheEntryParent* aActor) override;
+
+  virtual dom::os::POsFileChannelParent*
+  AllocPOsFileChannelParent() override;
+
+  virtual bool
+  DeallocPOsFileChannelParent(dom::os::POsFileChannelParent* aActor) override;
 };
 
 } // namespace ipc

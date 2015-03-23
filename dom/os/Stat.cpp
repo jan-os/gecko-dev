@@ -1,0 +1,20 @@
+/* vim: set shiftwidth=2 tabstop=8 autoindent cindent expandtab: */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this file,
+ * You can obtain one at http://mozilla.org/MPL/2.0/. */
+
+#include "mozilla/dom/OsManagerBinding.h"
+#include "Stat.h"
+
+namespace mozilla {
+namespace dom {
+namespace os {
+
+NS_IMPL_CYCLE_COLLECTION_WRAPPERCACHE(Stat, mParent)
+
+NS_IMPL_CYCLE_COLLECTION_ROOT_NATIVE(Stat, AddRef)
+NS_IMPL_CYCLE_COLLECTION_UNROOT_NATIVE(Stat, Release)
+
+} // namespace os
+} // namespace dom
+} // namespace mozilla

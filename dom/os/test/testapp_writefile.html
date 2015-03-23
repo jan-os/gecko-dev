@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <script type="application/javascript" src="common_app.js"></script>
+  <meta charset="utf-8">
+</head>
+<body>
+<div id="blah">initial text</div>
+<pre id="test">
+<script>
+  function runTest(expected) {
+    return new Promise((res, rej) => {
+      var workerCode = `
+        var path = navigator.os.TEMP_DIR + '/test_writefile';
+        setTimeout(() => {
+        try {
+          var file = navigator.os.open(path,
+            navigator.os.RDWR | navigator.os.CREAT, 0666);
+          var arr = new Uint8Array("` + expected + `".split('').map(c => c.charCodeAt(0)));
+          var written = navigator.os.write(file, arr);
+          navigator.os.close(file);
+
+          file = navigator.os.open(path, navigator.os.RDONLY, navigator.os.IREAD);
+          var data = navigator.os.read(file, 200);
+          navigator.os.close(file);
+
+          var open2err = null;
+          try {
+            var open2 = navigator.os.open(navigator.os.TEMP_DIR + '/non/existing/path',
+              navigator.os.RDWR, 0666);
+          }
+          catch (ex) {
+            open2err = ex;
+          }
+
+          var open3err = null;
+          try {
+            var open3 = navigator.os.open('/non/existing/path',
+              navigator.os.RDWR, 0666);
+          }
+          catch (ex) {
+            open3err = ex;
+          }
+
+          postMessage(JSON.stringify({
+            data: data.join(','),
+            written: written,
+            open2: open2,
+            open2err: open2err,
+            open3: open3,
+            open3err: open3err
+          }));
+        }
+        catch (ex) {
+          postMessage("write err: " + ex);
+        }
+        }, 500);
+        `;
+
+      var workerBlob = new Blob([workerCode], { type: 'application/javascript' });
+      var w = new Worker(URL.createObjectURL(workerBlob));
+
+      w.onmessage = e => {
+        is(e.data.indexOf('write err'), -1, 'ran successfully');
+        if (e.data.indexOf('write err') !== -1) {
+          dump(e.data + '\n');
+          return res();
+        }
+
+        try {
+          var data = JSON.parse(e.data);
+        }
+        catch(ex) {
+          is(null, ex, fn + ' is valid JSON');
+        }
+
+        is(data.written, expected.length, 'written');
+        var expectedData = expected.split('').map(c=>c.charCodeAt(0)).join(',');
+        is(data.data, expectedData, 'data');
+        is(data.open2, undefined, 'open2');
+        is(data.open2err, 'No such file or directory', 'open2err');
+        is(data.open3, undefined, 'open3');
+        is(data.open3err, 'Permission denied', 'open3err');
+
+        res();
+      };
+    });
+  }
+
+  Promise.all([
+    runTest('Hello world')
+  ]).then(() => {
+    finish();
+  });
+</script>
+</pre>
+</body>
+</html>

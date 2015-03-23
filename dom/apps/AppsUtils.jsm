@@ -134,6 +134,19 @@ function _setAppProperties(aObj, aApp) {
   aObj.android_packagename = aApp.android_packagename;
   aObj.android_classname = aApp.android_classname;
 #endif
+
+  let osPaths = Cc["@mozilla.org/array;1"].createInstance(Ci.nsIMutableArray);
+  let os = (aApp.manifest && aApp.manifest.permissions &&
+            aApp.manifest.permissions['posix-files'] &&
+            aApp.manifest.permissions['posix-files'].paths) || [];
+  os.forEach(function(path) {
+    let wrapper = Cc["@mozilla.org/supports-string;1"]
+                    .createInstance(Ci.nsISupportsString);
+    wrapper.data = path;
+    osPaths.appendElement(wrapper, false);
+  });
+
+  aObj.osPaths = osPaths;
 }
 
 this.AppsUtils = {

@@ -1,0 +1,119 @@
+<!DOCTYPE HTML>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>os rename test</title>
+  <script type="text/javascript" src="/tests/SimpleTest/SimpleTest.js"></script>
+  <link rel="stylesheet" type="text/css" href="/tests/SimpleTest/test.css" />
+</head>
+<body>
+  <a target="_blank" href="https://bugzilla.mozilla.org/show_bug.cgi?id=1141021">os tests</a>
+  <p id="display"></p>
+  <div id="content" style="display: none"></div>
+  <pre id="test"></pre>
+
+  <script>
+  var jsFuns = SpecialPowers.Cu.getJSTestingFunctions();
+
+  function runTest() {
+    return new Promise((res, rej) => {
+      var workerCode = `
+        try {
+          var paths = ['test_rename1', 'test_rename2'].map(function(f) {
+            return navigator.os.TEMP_DIR + '/' + f;
+          });
+          var path1 = paths[0], path2 = paths[1];
+
+          // unlink all the paths
+          paths.forEach(path => {
+            try {
+              navigator.os.unlink(path);
+            }
+            catch (ex) {}
+          });
+
+          // create new file and rename it to path2
+          var file1 = navigator.os.open(path1, navigator.os.RDWR | navigator.os.CREAT, 0666);
+          navigator.os.close(file1);
+
+          navigator.os.rename(path1, path2);
+
+          // stat both of them to check if the rename succeeded
+          var stat1, stat2, stat1err, stat2err;
+          try {
+            stat1 = navigator.os.stat(path1);
+          }
+          catch (ex) {
+            dump('stat1err ' + ex);
+            stat1err = ex;
+          }
+          try {
+            stat2 = navigator.os.stat(path2);
+          }
+          catch (ex) {
+            dump('stat2err ' + ex);
+            stat2err = ex;
+          }
+
+          var rename2err;
+          try {
+            navigator.os.rename(navigator.os.TEMP_DIR + '/sdasajkdsa',
+              navigator.os.TEMP_DIR + '/zuszo');
+          }
+          catch (ex) {
+            rename2err = ex;
+          }
+
+          postMessage(JSON.stringify({
+            stat1: stat1 && stat1.isFile(),
+            stat2: stat2 && stat2.isFile(),
+            stat1err: stat1err,
+            stat2err: stat2err,
+            rename2err: rename2err
+          }));
+        }
+        catch (ex) {
+          postMessage("rename err: " + ex);
+        }
+        `;
+
+      var workerBlob = new Blob([workerCode], { type: 'application/javascript' });
+      var w = new Worker(URL.createObjectURL(workerBlob));
+
+      w.onmessage = e => {
+        is(e.data.indexOf('rename err'), -1, 'ran successfully');
+        if (e.data.indexOf('rename err') !== -1) {
+          dump(e.data + '\n');
+          return res();
+        }
+
+        try {
+          var data = JSON.parse(e.data);
+        }
+        catch(ex) {
+          ok(false, 'is valid JSON (' + e.data + ')');
+          return res();
+        }
+
+        is(data.stat1, undefined, 'stat1');
+        is(data.stat2, true, 'stat2');
+        is(data.stat1err, 'No such file or directory', 'stat1err');
+        is(data.stat2err, undefined, 'stat2err');
+        is(data.rename2err, 'No such file or directory', 'rename2err');
+
+        res();
+      };
+    });
+  }
+
+  SimpleTest.waitForExplicitFinish();
+
+  SpecialPowers.pushPrefEnv({"set":[["dom.os.security.disabled", true]]},
+    Promise.all([
+      runTest()
+    ]).then(() => {
+      SimpleTest.finish();
+    }));
+  </script>
+</body>
+</html>
