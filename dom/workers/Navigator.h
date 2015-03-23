@@ -19,6 +19,10 @@
 namespace mozilla {
 namespace dom {
 class Promise;
+
+namespace os {
+class OsManager;
+} // namespace os
 } // namespace dom
 } // namespace mozilla
 
@@ -30,6 +34,7 @@ class WorkerNavigator final : public nsWrapperCache
 
   NavigatorProperties mProperties;
   bool mOnline;
+  os::OsManager* mOsManager;
 
   WorkerNavigator(const NavigatorProperties& aProperties,
                   bool aOnline)
@@ -112,6 +117,8 @@ public:
                                           const nsAString& aName,
                                           const nsAString& aOwner,
                                           ErrorResult& aRv);
+
+  os::OsManager* GetOs(ErrorResult& aRv);
 };
 
 END_WORKERS_NAMESPACE

@@ -11,3 +11,7 @@ WorkerNavigator implements NavigatorID;
 WorkerNavigator implements NavigatorLanguage;
 WorkerNavigator implements NavigatorOnLine;
 WorkerNavigator implements NavigatorDataStore;
+partial interface WorkerNavigator {
+    [Throws]
+    readonly attribute OsManager? os;
+};

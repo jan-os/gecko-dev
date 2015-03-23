@@ -93,6 +93,7 @@ IPDL_SOURCES += [
 
 LOCAL_INCLUDES += [
     '../base',
+    '../os',
     '../system',
     '/dom/base',
     '/xpcom/build',

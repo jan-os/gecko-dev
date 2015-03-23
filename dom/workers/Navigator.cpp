@@ -11,6 +11,7 @@
 #include "mozilla/dom/Promise.h"
 #include "mozilla/dom/PromiseWorkerProxy.h"
 #include "mozilla/dom/WorkerNavigatorBinding.h"
+#include "mozilla/dom/OsManager.h"
 
 #include "Navigator.h"
 #include "nsProxyRelease.h"
@@ -392,6 +393,25 @@ WorkerNavigator::GetUserAgent(nsString& aUserAgent) const
   if (!runnable->Dispatch(workerPrivate->GetJSContext())) {
     JS_ReportPendingException(workerPrivate->GetJSContext());
   }
+}
+
+// Is there no destruction function here???
+bool mOsManagerInitialized = false;
+
+os::OsManager*
+WorkerNavigator::GetOs(ErrorResult& aRv)
+{
+  if (!mOsManagerInitialized) {
+    WorkerPrivate* workerPrivate = GetCurrentThreadWorkerPrivate();
+    MOZ_ASSERT(workerPrivate);
+
+    mOsManager = new os::OsManager(workerPrivate->GlobalScope());
+    mOsManager->Init();
+
+    mOsManagerInitialized = true;
+  }
+
+  return mOsManager;
 }
 
 END_WORKERS_NAMESPACE

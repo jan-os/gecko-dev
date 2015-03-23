@@ -50,6 +50,7 @@ LOCAL_INCLUDES += [
     '/dom/indexedDB',
     '/dom/media/webaudio',
     '/dom/media/webspeech/recognition',
+    '/dom/os',
     '/dom/svg',
     '/dom/workers',
     '/dom/xbl',
