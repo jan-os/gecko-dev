@@ -23,7 +23,9 @@ NS_INTERFACE_MAP_END_INHERITING(DOMEventTargetHelper)
 
 OsManager::OsManager(workers::WorkerGlobalScope* aScope)
   : DOMEventTargetHelper(static_cast<DOMEventTargetHelper*>(aScope))
-{}
+{
+  this->mScope = aScope;
+}
 
 already_AddRefed<OsManager>
 OsManager::Constructor(GlobalObject& aGlobal, ErrorResult& aRv)
@@ -59,7 +61,7 @@ OsManager::Fopen(const nsAString& path, const nsAString& mode, DOMString& result
   sprintf(ptrStringBuffer, "%p", file);
 
   this->valid_file_pointers.push_back((size_t)file);
-  
+
   result.SetOwnedString(NS_ConvertASCIItoUTF16(ptrStringBuffer));
 }
 
@@ -67,9 +69,9 @@ int
 OsManager::Fclose(const nsAString& ptr)
 {
   const char* ptrstring = NS_LossyConvertUTF16toASCII(ptr).get();
-  
+
   size_t realptr = (size_t)strtoull(ptrstring, const_cast<char**>(&ptrstring), 16);
-  
+
   std::list<size_t> ptrs = this->valid_file_pointers;
 
   // detect if ptr is valid
@@ -79,6 +81,38 @@ OsManager::Fclose(const nsAString& ptr)
   }
 
   return fclose((FILE*)realptr);
+}
+
+class Stat*
+OsManager::Lstat(const nsAString& path, ErrorResult &aRv)
+{
+  char* real_path = realpath(NS_LossyConvertUTF16toASCII(path).get(), NULL);
+
+  struct stat sb;
+  if (lstat(real_path, &sb) != 0) {
+    // todo: make a new error type
+    aRv.Throw(NS_ERROR_FAILURE);
+    return nullptr;
+  }
+
+  // cant make it into nsCOMPtr for some reason, need to find out why
+  return new class Stat(this->mScope, sb);
+}
+
+class Stat*
+OsManager::Stat(const nsAString& path, ErrorResult &aRv)
+{
+  char* real_path = realpath(NS_LossyConvertUTF16toASCII(path).get(), NULL);
+
+  struct stat sb;
+  if (stat(real_path, &sb) != 0) {
+    // todo: make a new error type
+    aRv.Throw(NS_ERROR_FAILURE);
+    return nullptr;
+  }
+
+  // cant make it into nsCOMPtr for some reason, need to find out why
+  return new class Stat(this->mScope, sb);
 }
 
 } // namespace os

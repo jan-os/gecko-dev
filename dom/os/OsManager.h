@@ -9,8 +9,8 @@
 #include "mozilla/DOMEventTargetHelper.h"
 #include "../workers/WorkerFeature.h"
 #include "../workers/WorkerPrivate.h"
-#include "../workers/WorkerRunnable.h"
 #include "../workers/WorkerScope.h"
+#include "Stat.h"
 #include <list>
 
 class nsPIDOMWindow;
@@ -38,16 +38,21 @@ public:
   /**
    * WebIDL Interface
    */
-  
+
   // file operations
   void Fopen(const nsAString& path, const nsAString& mode, DOMString& result);
   int  Fclose(const nsAString& ptr);
+
+  // stat operations
+  class Stat* Stat(const nsAString& path, ErrorResult& aRv);
+  class Stat* Lstat(const nsAString& path, ErrorResult& aRv);
 
 protected:
   virtual ~OsManager() {}
 
 private:
   std::list<size_t> valid_file_pointers;
+  workers::WorkerGlobalScope* mScope;
 };
 
 } // namespace os

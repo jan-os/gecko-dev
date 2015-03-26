@@ -1,0 +1,69 @@
+<!DOCTYPE HTML>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>os stat test</title>
+  <script type="text/javascript" src="/tests/SimpleTest/SimpleTest.js"></script>
+  <link rel="stylesheet" type="text/css" href="/tests/SimpleTest/test.css" />
+</head>
+<body>
+  <a target="_blank" href="https://bugzilla.mozilla.org/show_bug.cgi?id=1141021">os tests</a>
+  <p id="display"></p>
+  <div id="content" style="display: none"></div>
+  <pre id="test"></pre>
+
+  <script>
+  var jsFuns = SpecialPowers.Cu.getJSTestingFunctions();
+
+  // /Volumes/repos/gecko-dev/obj-x86_64-apple-darwin14.0.0/_tests/testing/mochitest
+  function runTest(fn) {
+    return new Promise((res, rej) => {
+      var workerCode = `
+        try {
+          var stat = navigator.os.` + fn + `("../../../../dom/os/test/test_stat.html");
+  
+          postMessage(JSON.stringify({
+            mode: stat.mode,
+            isFile: stat.isFile(),
+            isDir: stat.isDirectory()
+          }));
+        }
+        catch (ex) {
+          postMessage("stat err: " + ex);
+        }
+        `;
+      
+      var workerBlob = new Blob([workerCode], { type: 'application/javascript' });
+      var w = new Worker(URL.createObjectURL(workerBlob));
+  
+      w.onmessage = e => {
+        ok(e.data.indexOf('stat err') === -1, fn + ' ran successfully');
+        
+        try {
+          var data = JSON.parse(e.data);
+        }
+        catch(ex) {
+          ok(null, ex, fn + ' is valid JSON');
+        }
+        
+        ok((data.mode & 0170000) == 0100000, fn + ' isFile');
+        ok((data.mode & 0170000) != 0040000, fn + ' isDir');
+        ok(data.isFile, fn + ' isFile2');
+        ok(!data.isDir, fn + ' isDir2');
+  
+        res();
+      };
+    });
+  }
+  
+  SimpleTest.waitForExplicitFinish();
+  
+  Promise.all([
+    runTest('stat'),
+    runTest('lstat')
+  ]).then(() => {
+    SimpleTest.finish();
+  });
+  </script>
+</body>
+</html>

@@ -6,11 +6,15 @@
 
 EXPORTS.mozilla.dom += [
     'OsManager.h',
+    'Stat.h'
 ]
 
 SOURCES += [
     'OsManager.cpp',
+    'Stat.cpp'
 ]
+
+MOCHITEST_MANIFESTS += ['test/mochitest.ini']
 
 FAIL_ON_WARNINGS = True
 
