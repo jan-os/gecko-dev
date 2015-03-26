@@ -15,17 +15,24 @@ namespace mozilla {
 namespace dom {
 namespace os {
 
+NS_IMPL_ADDREF_INHERITED(OsManager, DOMEventTargetHelper)
+NS_IMPL_RELEASE_INHERITED(OsManager, DOMEventTargetHelper)
+
+NS_INTERFACE_MAP_BEGIN(OsManager)
+NS_INTERFACE_MAP_END_INHERITING(DOMEventTargetHelper)
+
 OsManager::OsManager(workers::WorkerGlobalScope* aScope)
   : DOMEventTargetHelper(static_cast<DOMEventTargetHelper*>(aScope))
 {}
 
-void
-OsManager::Init()
-{}
-
-void
-OsManager::Shutdown()
-{}
+already_AddRefed<OsManager>
+OsManager::Constructor(GlobalObject& aGlobal, ErrorResult& aRv)
+{
+  // We don't allow Gecko to create OsManager through JS codes like
+  // window.OsManager() on the worker, so disable this for now.
+  NS_NOTREACHED("Cannot use the chrome constructor on the worker!");
+  return nullptr;
+}
 
 JSObject*
 OsManager::WrapObject(JSContext* aCx, JS::Handle<JSObject*> aGivenProto)
@@ -52,7 +59,6 @@ OsManager::Fopen(const nsAString& path, const nsAString& mode, DOMString& result
   sprintf(ptrStringBuffer, "%p", file);
 
   this->valid_file_pointers.push_back((size_t)file);
-  printf("fopen string is %s\n", ptrStringBuffer);
   
   result.SetOwnedString(NS_ConvertASCIItoUTF16(ptrStringBuffer));
 }
@@ -62,9 +68,7 @@ OsManager::Fclose(const nsAString& ptr)
 {
   const char* ptrstring = NS_LossyConvertUTF16toASCII(ptr).get();
   
-  printf("fclose comes in %s\n", ptrstring);
   size_t realptr = (size_t)strtoull(ptrstring, const_cast<char**>(&ptrstring), 16);
-  printf("realptr is %zu\n", realptr);
   
   std::list<size_t> ptrs = this->valid_file_pointers;
 
@@ -73,8 +77,6 @@ OsManager::Fclose(const nsAString& ptr)
     printf("Could not find the pointer\n");
     return EOF;
   }
-
-  printf("gonna call fclose %p\n", (FILE*)realptr);
 
   return fclose((FILE*)realptr);
 }

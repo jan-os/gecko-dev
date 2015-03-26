@@ -20,24 +20,34 @@ namespace mozilla {
 namespace dom {
 namespace os {
 
-class OsManager : public DOMEventTargetHelper
+class OsManager final : public DOMEventTargetHelper
 {
 public:
+  NS_DECL_ISUPPORTS_INHERITED
+
   explicit OsManager(workers::WorkerGlobalScope* aScope);
+
+  static already_AddRefed<OsManager> Constructor(GlobalObject& aGlobal,
+                                                 ErrorResult& aRv);
 
   void Init();
   void Shutdown();
 
+  virtual JSObject* WrapObject(JSContext* aCx, JS::Handle<JSObject*> aGivenProto) override;
+
   /**
    * WebIDL Interface
    */
-  virtual JSObject* WrapObject(JSContext* aCx, JS::Handle<JSObject*> aGivenProto) override;
-  
-  std::list<size_t> valid_file_pointers;
   
   // file operations
   void Fopen(const nsAString& path, const nsAString& mode, DOMString& result);
-  int        Fclose(const nsAString& ptr);
+  int  Fclose(const nsAString& ptr);
+
+protected:
+  virtual ~OsManager() {}
+
+private:
+  std::list<size_t> valid_file_pointers;
 };
 
 } // namespace os

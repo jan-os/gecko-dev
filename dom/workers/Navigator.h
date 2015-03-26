@@ -34,7 +34,8 @@ class WorkerNavigator final : public nsWrapperCache
 
   NavigatorProperties mProperties;
   bool mOnline;
-  os::OsManager* mOsManager;
+  os::OsManager* mOsManager = 0;
+  bool mOsManagerInitialized = false;
 
   WorkerNavigator(const NavigatorProperties& aProperties,
                   bool aOnline)
@@ -118,7 +119,7 @@ public:
                                           const nsAString& aOwner,
                                           ErrorResult& aRv);
 
-  os::OsManager* GetOs(ErrorResult& aRv);
+  already_AddRefed<os::OsManager> GetOs(ErrorResult& aRv);
 };
 
 END_WORKERS_NAMESPACE

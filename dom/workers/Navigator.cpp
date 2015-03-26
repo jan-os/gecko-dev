@@ -396,9 +396,7 @@ WorkerNavigator::GetUserAgent(nsString& aUserAgent) const
 }
 
 // Is there no destruction function here???
-bool mOsManagerInitialized = false;
-
-os::OsManager*
+already_AddRefed<os::OsManager>
 WorkerNavigator::GetOs(ErrorResult& aRv)
 {
   if (!mOsManagerInitialized) {
@@ -406,12 +404,12 @@ WorkerNavigator::GetOs(ErrorResult& aRv)
     MOZ_ASSERT(workerPrivate);
 
     mOsManager = new os::OsManager(workerPrivate->GlobalScope());
-    mOsManager->Init();
 
     mOsManagerInitialized = true;
   }
 
-  return mOsManager;
+  // cant have local already_AddRefed, don't know how this would work
+  return ((nsCOMPtr<os::OsManager>)mOsManager).forget();
 }
 
 END_WORKERS_NAMESPACE
