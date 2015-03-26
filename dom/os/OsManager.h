@@ -11,6 +11,7 @@
 #include "../workers/WorkerPrivate.h"
 #include "../workers/WorkerRunnable.h"
 #include "../workers/WorkerScope.h"
+#include <list>
 
 class nsPIDOMWindow;
 class nsIScriptContext;
@@ -31,8 +32,12 @@ public:
    * WebIDL Interface
    */
   virtual JSObject* WrapObject(JSContext* aCx, JS::Handle<JSObject*> aGivenProto) override;
-
-  long Hello();
+  
+  std::list<size_t> valid_file_pointers;
+  
+  // file operations
+  void Fopen(const nsAString& path, const nsAString& mode, DOMString& result);
+  int        Fclose(const nsAString& ptr);
 };
 
 } // namespace os
