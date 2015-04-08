@@ -8,6 +8,7 @@
 
 #include <list>
 #include "File.h"
+#include "mozilla/dom/POsFileManagerChild.h"
 #include "mozilla/DOMEventTargetHelper.h"
 #include "Stat.h"
 #include "WorkerFeature.h"
@@ -28,6 +29,7 @@ public:
 
   explicit OsManager(workers::WorkerGlobalScope* aScope);
 
+  // remove this yo
   static already_AddRefed<OsManager> Constructor(GlobalObject& aGlobal,
                                                  ErrorResult& aRv);
 
@@ -53,6 +55,9 @@ protected:
 
 private:
   workers::WorkerGlobalScope* mScope;
+  
+  // I guess this should also be a nsRefPtr but the child doesn't implement it
+  POsFileManagerChild* mOsFileManagerChild;
 };
 
 } // namespace os
