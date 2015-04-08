@@ -4,14 +4,20 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
-EXPORTS.mozilla.dom += [
+EXPORTS.mozilla.dom.os += [
+    'File.h',
     'OsManager.h',
-    'Stat.h'
+    'Stat.h',
 ]
 
 SOURCES += [
+    'File.cpp',
     'OsManager.cpp',
-    'Stat.cpp'
+    'Stat.cpp',
+]
+
+LOCAL_INCLUDES += [
+    '/dom/workers',
 ]
 
 MOCHITEST_MANIFESTS += ['test/mochitest.ini']

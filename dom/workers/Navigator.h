@@ -15,11 +15,11 @@
 // Need this to use Navigator::HasDataStoreSupport() in
 // WorkerNavigatorBinding.cpp
 #include "mozilla/dom/Navigator.h"
+#include "mozilla/dom/os/OsManager.h"
 
 namespace mozilla {
 namespace dom {
 class Promise;
-
 namespace os {
 class OsManager;
 } // namespace os
@@ -34,8 +34,7 @@ class WorkerNavigator final : public nsWrapperCache
 
   NavigatorProperties mProperties;
   bool mOnline;
-  os::OsManager* mOsManager = 0;
-  bool mOsManagerInitialized = false;
+  nsRefPtr<os::OsManager> mOsManager;
 
   WorkerNavigator(const NavigatorProperties& aProperties,
                   bool aOnline)

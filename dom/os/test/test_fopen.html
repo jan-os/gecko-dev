@@ -2,7 +2,7 @@
 <html>
 <head>
   <meta charset="utf-8">
-  <title>os stat test</title>
+  <title>os fopen test</title>
   <script type="text/javascript" src="/tests/SimpleTest/SimpleTest.js"></script>
   <link rel="stylesheet" type="text/css" href="/tests/SimpleTest/test.css" />
 </head>
@@ -15,21 +15,20 @@
   <script>
   var jsFuns = SpecialPowers.Cu.getJSTestingFunctions();
 
-  // /Volumes/repos/gecko-dev/obj-x86_64-apple-darwin14.0.0/_tests/testing/mochitest
   function runTest(fn) {
     return new Promise((res, rej) => {
       var workerCode = `
         try {
-          var stat = navigator.os.` + fn + `("../../../../dom/os/test/test_stat.html");
+          var file = navigator.os.fopen("../../../../dom/os/test/test_fopen.html", "rb");
+          var cr = navigator.os.fclose(file);
 
           postMessage(JSON.stringify({
-            mode: stat.mode,
-            isFile: stat.isFile(),
-            isDir: stat.isDirectory()
+            hasFile: !!file,
+            closeRet: cr
           }));
         }
         catch (ex) {
-          postMessage("stat err: " + ex);
+          postMessage("fopen err: " + ex);
         }
         `;
 
@@ -37,7 +36,7 @@
       var w = new Worker(URL.createObjectURL(workerBlob));
 
       w.onmessage = e => {
-        ok(e.data.indexOf('stat err') === -1, fn + ' ran successfully');
+        ok(e.data.indexOf('fopen err') === -1, 'ran successfully');
 
         try {
           var data = JSON.parse(e.data);
@@ -46,10 +45,8 @@
           ok(null, ex, fn + ' is valid JSON');
         }
 
-        ok((data.mode & 0170000) == 0100000, fn + ' isFile');
-        ok((data.mode & 0170000) != 0040000, fn + ' isDir');
-        ok(data.isFile, fn + ' isFile2');
-        ok(!data.isDir, fn + ' isDir2');
+        ok(data.hasFile === true, 'hasFile');
+        ok(data.closeRet === 0, 'closeRet (exp. 0, was ' + data.closeRet + ')');
 
         res();
       };
@@ -59,8 +56,7 @@
   SimpleTest.waitForExplicitFinish();
 
   Promise.all([
-    runTest('stat'),
-    runTest('lstat')
+    runTest()
   ]).then(() => {
     SimpleTest.finish();
   });

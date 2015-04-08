@@ -6,12 +6,13 @@
 #ifndef mozilla_dom_os_OsManager_h
 #define mozilla_dom_os_OsManager_h
 
-#include "mozilla/DOMEventTargetHelper.h"
-#include "../workers/WorkerFeature.h"
-#include "../workers/WorkerPrivate.h"
-#include "../workers/WorkerScope.h"
-#include "Stat.h"
 #include <list>
+#include "File.h"
+#include "mozilla/DOMEventTargetHelper.h"
+#include "Stat.h"
+#include "WorkerFeature.h"
+#include "WorkerPrivate.h"
+#include "WorkerScope.h"
 
 class nsPIDOMWindow;
 class nsIScriptContext;
@@ -40,18 +41,17 @@ public:
    */
 
   // file operations
-  void Fopen(const nsAString& path, const nsAString& mode, DOMString& result);
-  int  Fclose(const nsAString& ptr);
+  already_AddRefed<File> Fopen(const nsAString& aPath, const nsAString& aMode, ErrorResult& aRv);
+  int Fclose(File& aFile);
 
   // stat operations
-  class Stat* Stat(const nsAString& path, ErrorResult& aRv);
-  class Stat* Lstat(const nsAString& path, ErrorResult& aRv);
+  already_AddRefed<os::Stat> Stat(const nsAString& aPath, ErrorResult& aRv);
+  already_AddRefed<os::Stat> Lstat(const nsAString& aPath, ErrorResult& aRv);
 
 protected:
   virtual ~OsManager() {}
 
 private:
-  std::list<size_t> valid_file_pointers;
   workers::WorkerGlobalScope* mScope;
 };
 

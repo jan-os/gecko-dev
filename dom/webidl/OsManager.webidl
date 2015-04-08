@@ -1,7 +1,8 @@
 [Exposed=(Worker,System)]
 interface OsManager {
-  DOMString fopen(DOMString path, DOMString mode);
-  long fclose(DOMString ptr);
+  [Throws]
+  OsManagerFile fopen(DOMString path, DOMString mode);
+  long fclose(OsManagerFile file);
 
   [Throws]
   OsManagerStat lstat(DOMString path);
@@ -33,3 +34,6 @@ interface OsManagerStat {
   boolean isFIFO();
   boolean isSocket();
 };
+
+[Exposed=(Worker,System)]
+interface OsManagerFile {};

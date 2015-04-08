@@ -3,13 +3,15 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
-#include <limits>
-#include "OsManager.h"
-#include "mozilla/DOMEventTargetHelper.h"
-#include "nsIDOMClassInfo.h"
-#include "mozilla/dom/OsManagerBinding.h"
-#include <stdio.h>
 #include <algorithm>
+#include <limits>
+#include <stdio.h>
+#include <sys/stat.h>
+#include <sys/types.h>
+#include "mozilla/DOMEventTargetHelper.h"
+#include "mozilla/dom/OsManagerBinding.h"
+#include "nsIDOMClassInfo.h"
+#include "OsManager.h"
 
 namespace mozilla {
 namespace dom {
@@ -22,10 +24,9 @@ NS_INTERFACE_MAP_BEGIN(OsManager)
 NS_INTERFACE_MAP_END_INHERITING(DOMEventTargetHelper)
 
 OsManager::OsManager(workers::WorkerGlobalScope* aScope)
-  : DOMEventTargetHelper(static_cast<DOMEventTargetHelper*>(aScope))
-{
-  this->mScope = aScope;
-}
+  : DOMEventTargetHelper(static_cast<DOMEventTargetHelper*>(aScope)),
+    mScope(aScope)
+{}
 
 already_AddRefed<OsManager>
 OsManager::Constructor(GlobalObject& aGlobal, ErrorResult& aRv)
@@ -42,51 +43,33 @@ OsManager::WrapObject(JSContext* aCx, JS::Handle<JSObject*> aGivenProto)
   return OsManagerBinding::Wrap(aCx, this, aGivenProto);
 }
 
-// ToNewCString ??
-
-void
-OsManager::Fopen(const nsAString& path, const nsAString& mode, DOMString& result)
+already_AddRefed<File>
+OsManager::Fopen(const nsAString& aPath, const nsAString& aMode, ErrorResult &aRv)
 {
   // realpath with NULL as second param does malloc()
-  char* real_path = realpath(NS_LossyConvertUTF16toASCII(path).get(), NULL);
+  char* real_path = realpath(NS_LossyConvertUTF16toASCII(aPath).get(), NULL);
 
-  FILE* file = fopen(real_path, NS_LossyConvertUTF16toASCII(mode).get());
+  FILE* file = fopen(real_path, NS_LossyConvertUTF16toASCII(aMode).get());
   free(real_path);
   if (file == NULL) {
-    result.SetNull();
-    return;
+    aRv.Throw(NS_ERROR_FAILURE);
+    return nullptr;
   }
-
-  char ptrStringBuffer[sizeof(size_t)];
-  sprintf(ptrStringBuffer, "%p", file);
-
-  this->valid_file_pointers.push_back((size_t)file);
-
-  result.SetOwnedString(NS_ConvertASCIItoUTF16(ptrStringBuffer));
+  
+  nsRefPtr<File> osFile = new File(this, file);
+  return osFile.forget();
 }
 
 int
-OsManager::Fclose(const nsAString& ptr)
+OsManager::Fclose(File& aFile)
 {
-  const char* ptrstring = NS_LossyConvertUTF16toASCII(ptr).get();
-
-  size_t realptr = (size_t)strtoull(ptrstring, const_cast<char**>(&ptrstring), 16);
-
-  std::list<size_t> ptrs = this->valid_file_pointers;
-
-  // detect if ptr is valid
-  if (std::find(ptrs.begin(), ptrs.end(), realptr) == ptrs.end()) {
-    printf("Could not find the pointer\n");
-    return EOF;
-  }
-
-  return fclose((FILE*)realptr);
+  return fclose(aFile.GetFilePtr());
 }
 
-class Stat*
-OsManager::Lstat(const nsAString& path, ErrorResult &aRv)
+already_AddRefed<os::Stat>
+OsManager::Lstat(const nsAString& aPath, ErrorResult &aRv)
 {
-  char* real_path = realpath(NS_LossyConvertUTF16toASCII(path).get(), NULL);
+  char* real_path = realpath(NS_LossyConvertUTF16toASCII(aPath).get(), NULL);
 
   struct stat sb;
   if (lstat(real_path, &sb) != 0) {
@@ -95,14 +78,14 @@ OsManager::Lstat(const nsAString& path, ErrorResult &aRv)
     return nullptr;
   }
 
-  // cant make it into nsCOMPtr for some reason, need to find out why
-  return new class Stat(this->mScope, sb);
+  nsRefPtr<os::Stat> stat = new os::Stat(this, sb);
+  return stat.forget();
 }
 
-class Stat*
-OsManager::Stat(const nsAString& path, ErrorResult &aRv)
+already_AddRefed<os::Stat>
+OsManager::Stat(const nsAString& aPath, ErrorResult &aRv)
 {
-  char* real_path = realpath(NS_LossyConvertUTF16toASCII(path).get(), NULL);
+  char* real_path = realpath(NS_LossyConvertUTF16toASCII(aPath).get(), NULL);
 
   struct stat sb;
   if (stat(real_path, &sb) != 0) {
@@ -111,8 +94,8 @@ OsManager::Stat(const nsAString& path, ErrorResult &aRv)
     return nullptr;
   }
 
-  // cant make it into nsCOMPtr for some reason, need to find out why
-  return new class Stat(this->mScope, sb);
+  nsRefPtr<os::Stat> stat = new os::Stat(this, sb);
+  return stat.forget();
 }
 
 } // namespace os

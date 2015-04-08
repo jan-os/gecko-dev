@@ -8,10 +8,10 @@
 
 #include "mozilla/dom/DataStore.h"
 #include "mozilla/dom/DataStoreBinding.h"
+#include "mozilla/dom/os/OsManager.h"
 #include "mozilla/dom/Promise.h"
 #include "mozilla/dom/PromiseWorkerProxy.h"
 #include "mozilla/dom/WorkerNavigatorBinding.h"
-#include "mozilla/dom/OsManager.h"
 
 #include "Navigator.h"
 #include "nsProxyRelease.h"
@@ -395,21 +395,17 @@ WorkerNavigator::GetUserAgent(nsString& aUserAgent) const
   }
 }
 
-// Is there no destruction function here???
 already_AddRefed<os::OsManager>
 WorkerNavigator::GetOs(ErrorResult& aRv)
 {
-  if (!mOsManagerInitialized) {
+  if (!mOsManager) {
     WorkerPrivate* workerPrivate = GetCurrentThreadWorkerPrivate();
     MOZ_ASSERT(workerPrivate);
 
     mOsManager = new os::OsManager(workerPrivate->GlobalScope());
-
-    mOsManagerInitialized = true;
   }
 
-  // cant have local already_AddRefed, don't know how this would work
-  return ((nsCOMPtr<os::OsManager>)mOsManager).forget();
+  return mOsManager.forget();
 }
 
 END_WORKERS_NAMESPACE
