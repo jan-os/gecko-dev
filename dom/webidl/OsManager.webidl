@@ -2,6 +2,8 @@
 interface OsManager {
   [Throws]
   OsManagerFile fopen(DOMString path, DOMString mode);
+  [Throws]
+  Uint8Array fread(long bytes, OsManagerFile file);
   long fclose(OsManagerFile file);
 
   [Throws]

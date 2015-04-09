@@ -12,12 +12,12 @@ namespace dom {
 namespace os {
 
 // This protocol is used for the OsFileChannel API
-protocol POsFileChannel
+sync protocol POsFileChannel
 {
   manager PBackground;
 
 parent:
-  Hello();
+  sync Fopen(nsString path, nsString mode) returns (size_t file_ptr);
 
 child:
   __delete__();

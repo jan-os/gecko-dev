@@ -25,13 +25,20 @@ OsFileChannelParent::~OsFileChannelParent()
 }
 
 bool
-OsFileChannelParent::RecvHello()
+OsFileChannelParent::RecvFopen(const nsString& aPath, const nsString& aMode, size_t* aFilePtr)
 {
   AssertIsOnBackgroundThread();
 
-  printf("Hello\n");
+  // realpath with NULL as second param does malloc()
+  char* real_path = realpath(NS_LossyConvertUTF16toASCII(aPath).get(), NULL);
+  printf("RecvFopen %s\n", real_path);
 
-  return true;
+  FILE* file = fopen(real_path, NS_LossyConvertUTF16toASCII(aMode).get());
+  free(real_path);
+
+  *aFilePtr = (size_t)file;
+
+  return file != NULL;
 }
 
 void

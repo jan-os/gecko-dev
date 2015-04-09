@@ -9,6 +9,7 @@
 #include <list>
 #include "File.h"
 #include "mozilla/dom/os/POsFileChannelChild.h"
+#include "mozilla/dom/TypedArray.h"
 #include "mozilla/DOMEventTargetHelper.h"
 #include "Stat.h"
 #include "WorkerFeature.h"
@@ -43,6 +44,7 @@ public:
 
   // file operations
   already_AddRefed<File> Fopen(const nsAString& aPath, const nsAString& aMode, ErrorResult& aRv);
+  void Fread(JSContext* aCx, int aBytes, File& aFile, JS::MutableHandle<JSObject*> aRet, ErrorResult& aRv);
   int Fclose(File& aFile);
 
   // stat operations

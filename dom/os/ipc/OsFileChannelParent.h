@@ -24,7 +24,7 @@ private:
   OsFileChannelParent();
   ~OsFileChannelParent();
 
-  virtual bool RecvHello() override;
+  virtual bool RecvFopen(const nsString& aPath, const nsString& aMode, size_t* aFilePtr) override;
 
   virtual void ActorDestroy(ActorDestroyReason aWhy) override;
 };

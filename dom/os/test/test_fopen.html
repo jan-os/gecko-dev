@@ -15,19 +15,22 @@
   <script>
   var jsFuns = SpecialPowers.Cu.getJSTestingFunctions();
 
-  function runTest(fn) {
+  function runTest(bytes, expected) {
     return new Promise((res, rej) => {
       var workerCode = `
         try {
-          var file = navigator.os.fopen("../../../../dom/os/test/test_fopen.html", "rb");
+          var file = navigator.os.fopen("../../../../dom/os/test/payload.txt", "rb");
+          var data = navigator.os.fread(` + bytes + `, file);
           var cr = navigator.os.fclose(file);
 
           postMessage(JSON.stringify({
             hasFile: !!file,
+            data: data.join(','),
             closeRet: cr
           }));
         }
         catch (ex) {
+          dump("fopen err: " + ex);
           postMessage("fopen err: " + ex);
         }
         `;
@@ -37,6 +40,10 @@
 
       w.onmessage = e => {
         ok(e.data.indexOf('fopen err') === -1, 'ran successfully');
+        if (e.data.indexOf('fopen err') !== -1) {
+          dump(e.data + '\n');
+          return res();
+        }
 
         try {
           var data = JSON.parse(e.data);
@@ -46,6 +53,12 @@
         }
 
         ok(data.hasFile === true, 'hasFile');
+
+        var expectedData = expected.split('').map(c=>c.charCodeAt(0)).join(',');
+        if (data.data !== expectedData) {
+          dump('expected "' + expectedData + '", but was "' + data.data + '"\n');
+        }
+        ok(data.data === expectedData, 'data');
         ok(data.closeRet === 0, 'closeRet (exp. 0, was ' + data.closeRet + ')');
 
         res();
@@ -56,7 +69,8 @@
   SimpleTest.waitForExplicitFinish();
 
   Promise.all([
-    runTest()
+    runTest(20, 'This is data that yo'),
+    runTest(2000, 'This is data that you can read through the APIs!') // read too much data
   ]).then(() => {
     SimpleTest.finish();
   });

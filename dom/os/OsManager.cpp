@@ -8,6 +8,7 @@
 #include <stdio.h>
 #include <sys/stat.h>
 #include <sys/types.h>
+#include "jsapi.h"
 #include "mozilla/DOMEventTargetHelper.h"
 #include "mozilla/dom/OsManagerBinding.h"
 #include "mozilla/ipc/BackgroundChild.h"
@@ -32,7 +33,7 @@ OsManager::OsManager(workers::WorkerGlobalScope* aScope)
 {
   ipc::PBackgroundChild* backgroundChild = ipc::BackgroundChild::GetForCurrentThread();
   mActor = backgroundChild->SendPOsFileChannelConstructor();
-  
+
   MOZ_ASSERT(mActor);
 }
 
@@ -54,20 +55,37 @@ OsManager::WrapObject(JSContext* aCx, JS::Handle<JSObject*> aGivenProto)
 already_AddRefed<File>
 OsManager::Fopen(const nsAString& aPath, const nsAString& aMode, ErrorResult &aRv)
 {
-  bool ret = mActor->SendHello();
-  
-  // realpath with NULL as second param does malloc()
-  char* real_path = realpath(NS_LossyConvertUTF16toASCII(aPath).get(), NULL);
-
-  FILE* file = fopen(real_path, NS_LossyConvertUTF16toASCII(aMode).get());
-  free(real_path);
-  if (file == NULL) {
+  size_t file_ptr = 0;
+  bool ret = mActor->SendFopen((nsString&)aPath, (nsString&)aMode, &file_ptr);
+  if (!ret) {
     aRv.Throw(NS_ERROR_FAILURE);
     return nullptr;
   }
+
+  nsRefPtr<File> file = new File(this, (FILE*)file_ptr);
+  return file.forget();
+}
+
+void
+OsManager::Fread(JSContext* aCx, int aBytes, File& aFile, JS::MutableHandle<JSObject*> aRet, ErrorResult& aRv)
+{
+  unsigned char* buffer = (unsigned char*)malloc(aBytes + 1);
+  size_t bytes_read = fread(buffer, 1, aBytes, aFile.GetFilePtr());
   
-  nsRefPtr<File> osFile = new File(this, file);
-  return osFile.forget();
+  buffer[bytes_read] = '\0';
+  printf("read data from file '%s'\n", buffer);
+
+  JSObject* outView = nullptr;
+  outView = Uint8Array::Create(aCx, bytes_read, buffer);
+
+  free(buffer);
+
+  if (!outView) {
+    aRv.Throw(NS_ERROR_OUT_OF_MEMORY);
+    return;
+  }
+
+  aRet.set(outView);
 }
 
 int
