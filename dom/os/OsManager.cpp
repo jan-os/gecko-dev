@@ -10,6 +10,9 @@
 #include <sys/types.h>
 #include "mozilla/DOMEventTargetHelper.h"
 #include "mozilla/dom/OsManagerBinding.h"
+#include "mozilla/ipc/BackgroundChild.h"
+#include "mozilla/ipc/BackgroundUtils.h"
+#include "mozilla/ipc/PBackgroundChild.h"
 #include "nsIDOMClassInfo.h"
 #include "OsManager.h"
 
@@ -26,7 +29,12 @@ NS_INTERFACE_MAP_END_INHERITING(DOMEventTargetHelper)
 OsManager::OsManager(workers::WorkerGlobalScope* aScope)
   : DOMEventTargetHelper(static_cast<DOMEventTargetHelper*>(aScope)),
     mScope(aScope)
-{}
+{
+  ipc::PBackgroundChild* backgroundChild = ipc::BackgroundChild::GetForCurrentThread();
+  mActor = backgroundChild->SendPOsFileChannelConstructor();
+  
+  MOZ_ASSERT(mActor);
+}
 
 already_AddRefed<OsManager>
 OsManager::Constructor(GlobalObject& aGlobal, ErrorResult& aRv)
@@ -46,6 +54,8 @@ OsManager::WrapObject(JSContext* aCx, JS::Handle<JSObject*> aGivenProto)
 already_AddRefed<File>
 OsManager::Fopen(const nsAString& aPath, const nsAString& aMode, ErrorResult &aRv)
 {
+  bool ret = mActor->SendHello();
+  
   // realpath with NULL as second param does malloc()
   char* real_path = realpath(NS_LossyConvertUTF16toASCII(aPath).get(), NULL);
 

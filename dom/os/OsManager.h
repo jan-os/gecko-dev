@@ -8,6 +8,7 @@
 
 #include <list>
 #include "File.h"
+#include "mozilla/dom/os/POsFileChannelChild.h"
 #include "mozilla/DOMEventTargetHelper.h"
 #include "Stat.h"
 #include "WorkerFeature.h"
@@ -49,9 +50,12 @@ public:
   already_AddRefed<os::Stat> Lstat(const nsAString& aPath, ErrorResult& aRv);
 
 protected:
-  virtual ~OsManager() {}
+  virtual ~OsManager() {
+    // ? free(mActor) ?
+  }
 
 private:
+  POsFileChannelChild* mActor;
   workers::WorkerGlobalScope* mScope;
 };
 

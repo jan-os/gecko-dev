@@ -12,8 +12,12 @@ include protocol PCacheStorage;
 include protocol PCacheStreamControl;
 include protocol PFileDescriptorSet;
 include protocol PMessagePort;
+<<<<<<< HEAD
 include protocol PCameras;
 include protocol PNuwa;
+=======
+include protocol POsFileChannel;
+>>>>>>> Background channel for OS module
 include protocol PServiceWorkerManager;
 include protocol PUDPSocket;
 include protocol PVsync;
@@ -50,6 +54,7 @@ sync protocol PBackground
   manages PMessagePort;
   manages PCameras;
   manages PNuwa;
+  manages POsFileChannel;
   manages PServiceWorkerManager;
   manages PUDPSocket;
   manages PVsync;
@@ -83,6 +88,8 @@ parent:
   PAsmJSCacheEntry(OpenMode openMode,
                    WriteParams write,
                    PrincipalInfo principalInfo);
+                   
+  POsFileChannel();
 
 child:
   PCache();

@@ -145,6 +145,12 @@ protected:
 
   virtual bool
   DeallocPAsmJSCacheEntryChild(PAsmJSCacheEntryChild* aActor) override;
+
+  virtual dom::os::POsFileChannelChild*
+  AllocPOsFileChannelChild() override;
+
+  virtual bool
+  DeallocPOsFileChannelChild(dom::os::POsFileChannelChild* aActor) override;
 };
 
 class BackgroundChildImpl::ThreadLocal final

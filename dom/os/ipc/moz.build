@@ -5,27 +5,23 @@
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
 EXPORTS.mozilla.dom.os += [
-    'File.h',
-    'OsManager.h',
-    'Stat.h',
+    'OsFileChannelChild.h',
+    'OsFileChannelParent.h',
 ]
 
 SOURCES += [
-    'File.cpp',
-    'OsManager.cpp',
-    'Stat.cpp',
+    'OsFileChannelChild.cpp',
+    'OsFileChannelParent.cpp',
 ]
 
 LOCAL_INCLUDES += [
+    '../',
     '/dom/workers',
-    'ipc',
 ]
 
-DIRS += [
-    'ipc'
+IPDL_SOURCES += [
+    'POsFileChannel.ipdl',
 ]
-
-MOCHITEST_MANIFESTS += ['test/mochitest.ini']
 
 FAIL_ON_WARNINGS = True
 
