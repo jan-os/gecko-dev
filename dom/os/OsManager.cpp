@@ -8,8 +8,8 @@
 #include <stdio.h>
 #include <sys/stat.h>
 #include <sys/types.h>
-#include "mozilla/dom/OsManagerBinding.h"
 #include "mozilla/DOMEventTargetHelper.h"
+#include "mozilla/dom/OsManagerBinding.h"
 #include "nsIDOMClassInfo.h"
 #include "OsManager.h"
 
@@ -26,9 +26,7 @@ NS_INTERFACE_MAP_END_INHERITING(DOMEventTargetHelper)
 OsManager::OsManager(workers::WorkerGlobalScope* aScope)
   : DOMEventTargetHelper(static_cast<DOMEventTargetHelper*>(aScope)),
     mScope(aScope)
-{
-  // Open the channel somehow??
-}
+{}
 
 already_AddRefed<OsManager>
 OsManager::Constructor(GlobalObject& aGlobal, ErrorResult& aRv)
@@ -48,12 +46,6 @@ OsManager::WrapObject(JSContext* aCx, JS::Handle<JSObject*> aGivenProto)
 already_AddRefed<File>
 OsManager::Fopen(const nsAString& aPath, const nsAString& aMode, ErrorResult &aRv)
 {
-  printf("Yo Fopen %s\n", NS_LossyConvertUTF16toASCII((nsString&)aPath).get());
-  size_t* file_ptr = 0;
-  mOsFileManagerChild->SendFopen((nsString&)aPath, (nsString&)aMode, file_ptr);
-
-  printf("did fopen and got now %zu\n", *file_ptr);
-
   // realpath with NULL as second param does malloc()
   char* real_path = realpath(NS_LossyConvertUTF16toASCII(aPath).get(), NULL);
 
@@ -63,7 +55,7 @@ OsManager::Fopen(const nsAString& aPath, const nsAString& aMode, ErrorResult &aR
     aRv.Throw(NS_ERROR_FAILURE);
     return nullptr;
   }
-
+  
   nsRefPtr<File> osFile = new File(this, file);
   return osFile.forget();
 }
