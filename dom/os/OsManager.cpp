@@ -16,6 +16,7 @@
 #include "mozilla/ipc/PBackgroundChild.h"
 #include "nsIDOMClassInfo.h"
 #include "OsManager.h"
+#include "StatSerializer.h"
 
 namespace mozilla {
 namespace dom {
@@ -102,16 +103,13 @@ OsManager::Close(File& aFile)
 already_AddRefed<os::Stat>
 OsManager::Lstat(const nsAString& aPath, ErrorResult &aRv)
 {
-  char* real_path = realpath(NS_LossyConvertUTF16toASCII(aPath).get(), NULL);
+  StatWrapper* sw = new StatWrapper();
+  mActor->SendLstat((nsString&)aPath, sw);
 
-  struct stat sb;
-  if (lstat(real_path, &sb) != 0) {
-    // todo: make a new error type
-    aRv.Throw(NS_ERROR_FAILURE);
-    return nullptr;
-  }
+  nsRefPtr<os::Stat> stat = new os::Stat(this, sw->GetWrappedObject());
 
-  nsRefPtr<os::Stat> stat = new os::Stat(this, sb);
+  free(sw);
+
   return stat.forget();
 }
 

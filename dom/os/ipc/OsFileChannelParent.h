@@ -6,6 +6,7 @@
 #define mozilla_dom_OsFileChannelParent_h
 
 #include "mozilla/dom/os/POsFileChannelParent.h"
+#include "StatSerializer.h"
 
 namespace mozilla {
 
@@ -25,6 +26,7 @@ private:
   ~OsFileChannelParent();
 
   virtual bool RecvOpen(const nsString& aPath, const int& aAccess, const int& aPermission, int* aFd) override;
+  virtual bool RecvLstat(const nsString& aPath, StatWrapper* aRetval) override;
 
   virtual void ActorDestroy(ActorDestroyReason aWhy) override;
 };

@@ -38,6 +38,23 @@ OsFileChannelParent::RecvOpen(const nsString& aPath, const int& aAccess, const i
   return true; // -1 is valid return value here
 }
 
+bool
+OsFileChannelParent::RecvLstat(const nsString& aPath, StatWrapper* aRetval)
+{
+  AssertIsOnBackgroundThread();
+
+  char* real_path = realpath(NS_LossyConvertUTF16toASCII(aPath).get(), NULL);
+
+  struct stat sb;
+  lstat(real_path, &sb);
+
+  *aRetval = *(new StatWrapper(sb));
+
+  free(real_path);
+
+  return true;
+}
+
 void
 OsFileChannelParent::ActorDestroy(ActorDestroyReason aWhy)
 {

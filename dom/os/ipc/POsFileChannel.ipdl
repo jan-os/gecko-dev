@@ -6,7 +6,7 @@ include protocol PBackground;
 include DOMTypes;
 
 using struct mozilla::SerializedStructuredCloneBuffer from "ipc/IPCMessageUtils.h";
-using struct Stat from "mozilla/dom/os/StatSerializer.h";
+using mozilla::dom::os::StatWrapper from "mozilla/dom/os/StatSerializer.h";
 
 namespace mozilla {
 namespace dom {
@@ -19,7 +19,7 @@ sync protocol POsFileChannel
 
 parent:
   sync Open(nsString path, int access, int permission) returns (int fd);
-  /* sync Lstat(nsString path) returns (Stat sb); */
+  sync Lstat(nsString path) returns (StatWrapper sb);
 
 child:
   __delete__();

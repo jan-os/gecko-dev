@@ -1,45 +1,113 @@
 #ifndef mozilla_dom_os_StatSerializer_h
 #define mozilla_dom_os_StatSerializer_h
 
+#include <sys/stat.h>
+#include <sys/types.h>
+#include <unistd.h>
 #include "ipc/IPCMessageUtils.h"
-#include "mozilla/dom/os/Stat.h"
 
-using mozilla::AutoJSContext;
-using mozilla::dom::os;
+namespace mozilla {
+namespace dom {
+namespace os {
+class StatWrapper final {
+public:
+  StatWrapper() {}
+
+  StatWrapper(struct stat aStat)
+    : mStat(aStat)
+  {}
+
+  void SetWrappedObject(struct stat aStat)
+  {
+    mStat = aStat;
+  }
+
+  struct stat GetWrappedObject() const
+  {
+    return mStat;
+  }
+
+private:
+  struct stat mStat;
+};
+}
+}
+}
 
 namespace IPC {
 template <>
-struct ParamTraits<Stat*>
+struct ParamTraits<mozilla::dom::os::StatWrapper>
 {
-  typedef Stat* paramType;
+  typedef mozilla::dom::os::StatWrapper paramType;
 
-  // Function to serialize a MobileCallForwardingOptions.
   static void Write(Message *aMsg, const paramType& aParam)
   {
-    bool isNull = !aParam;
-    WriteParam(aMsg, isNull);
-    // If it is a null object, then we are done.
-    if (isNull) {
-      return;
-    }
+    struct stat s = aParam.GetWrappedObject();
+
+    WriteParam(aMsg, s.st_dev);
+    WriteParam(aMsg, s.st_ino);
+    WriteParam(aMsg, s.st_mode);
+    WriteParam(aMsg, s.st_nlink);
+    WriteParam(aMsg, s.st_uid);
+    WriteParam(aMsg, s.st_gid);
+    WriteParam(aMsg, s.st_rdev);
+    WriteParam(aMsg, s.st_size);
+    WriteParam(aMsg, s.st_blksize);
+    WriteParam(aMsg, s.st_blocks);
+    WriteParam(aMsg, s.st_atime);
+    WriteParam(aMsg, s.st_mtime);
+    WriteParam(aMsg, s.st_ctime);
   }
 
-  // Function to de-serialize a MobileCallForwardingOptions.
   static bool Read(const Message *aMsg, void **aIter, paramType* aResult)
   {
-    // Check if is the null pointer we have transfered.
-    bool isNull;
-    if (!ReadParam(aMsg, aIter, &isNull)) {
+    dev_t dev = 0;
+    ino_t ino = 0;
+    mode_t mode = 0;
+    nlink_t nlink = 0;
+    uid_t uid = 0;
+    gid_t gid = 0;
+    dev_t rdev = 0;
+    off_t size = 0;
+    blksize_t blksize = 0;
+    blkcnt_t blocks = 0;
+    time_t atime = 0;
+    time_t mtime = 0;
+    time_t ctime = 0;
+
+    if (!ReadParam(aMsg, aIter, &dev) ||
+        !ReadParam(aMsg, aIter, &ino) ||
+        !ReadParam(aMsg, aIter, &mode) ||
+        !ReadParam(aMsg, aIter, &nlink) ||
+        !ReadParam(aMsg, aIter, &uid) ||
+        !ReadParam(aMsg, aIter, &gid) ||
+        !ReadParam(aMsg, aIter, &rdev) ||
+        !ReadParam(aMsg, aIter, &size) ||
+        !ReadParam(aMsg, aIter, &blksize) ||
+        !ReadParam(aMsg, aIter, &blocks) ||
+        !ReadParam(aMsg, aIter, &atime) ||
+        !ReadParam(aMsg, aIter, &mtime) ||
+        !ReadParam(aMsg, aIter, &ctime)) {
       return false;
     }
 
-    if (isNull) {
-      *aResult = nullptr;
-      return true;
-    }
+    struct stat s = {
+      .st_dev = dev,
+      .st_ino = ino,
+      .st_mode = mode,
+      .st_nlink = nlink,
+      .st_uid = uid,
+      .st_gid = gid,
+      .st_rdev = rdev,
+      .st_size = size,
+      .st_blksize = blksize,
+      .st_blocks = blocks,
+      .st_atime = atime,
+      .st_mtime = mtime,
+      .st_ctime = ctime
+    };
 
-    // We release this ref after receiver finishes processing.
-    // NS_ADDREF(*aResult);
+    *aResult = *(new mozilla::dom::os::StatWrapper(s));
 
     return true;
   }
