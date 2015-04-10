@@ -1,15 +1,23 @@
 [Exposed=(Worker,System)]
 interface OsManager {
   [Throws]
-  OsManagerFile fopen(DOMString path, DOMString mode);
+  OsManagerFile open(DOMString path, long access, long permission);
   [Throws]
-  Uint8Array fread(long bytes, OsManagerFile file);
-  long fclose(OsManagerFile file);
+  Uint8Array read(OsManagerFile file, long bytes);
+  long write(OsManagerFile file, Uint8Array buffer, long bytes);
+  long close(OsManagerFile file);
 
   [Throws]
   OsManagerStat lstat(DOMString path);
   [Throws]
   OsManagerStat stat(DOMString path);
+
+  readonly attribute long RDONLY;
+  readonly attribute long WRONLY;
+  readonly attribute long RDWR;
+  readonly attribute long APPEND;
+  readonly attribute long IWRITE;
+  readonly attribute long IREAD;
 };
 
 [Exposed=(Worker,System)]

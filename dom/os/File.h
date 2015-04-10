@@ -20,31 +20,31 @@ namespace os {
 class File final : public nsWrapperCache
 {
 public:
-  File(OsManager* aParent, FILE* aFile)
+  File(OsManager* aParent, int aFd)
     : mParent(aParent)
-    , mFile(aFile)
+    , mFd(aFd)
   {}
 
   NS_INLINE_DECL_CYCLE_COLLECTING_NATIVE_REFCOUNTING(File)
   NS_DECL_CYCLE_COLLECTION_SCRIPT_HOLDER_NATIVE_CLASS(File)
 
   nsRefPtr<OsManager> GetParentObject() const { return mParent; }
-  
+
   JSObject*
   WrapObject(JSContext* aCx, JS::Handle<JSObject*> aGivenProto)
   {
     return OsManagerFileBinding::Wrap(aCx, this, aGivenProto);
   }
-  
-  FILE* GetFilePtr() const
+
+  int GetFd() const
   {
-    return mFile;
+    return mFd;
   }
 
 private:
   ~File() { }
   nsRefPtr<OsManager> mParent;
-  FILE* mFile;
+  int mFd;
 };
 
 } // namespace os

@@ -6,6 +6,7 @@
 #ifndef mozilla_dom_os_OsManager_h
 #define mozilla_dom_os_OsManager_h
 
+#include <fcntl.h>
 #include <list>
 #include "File.h"
 #include "mozilla/dom/os/POsFileChannelChild.h"
@@ -43,13 +44,21 @@ public:
    */
 
   // file operations
-  already_AddRefed<File> Fopen(const nsAString& aPath, const nsAString& aMode, ErrorResult& aRv);
-  void Fread(JSContext* aCx, int aBytes, File& aFile, JS::MutableHandle<JSObject*> aRet, ErrorResult& aRv);
-  int Fclose(File& aFile);
+  already_AddRefed<File> Open(const nsAString& aPath, int aAccess, int aPermission, ErrorResult& aRv);
+  void Read(JSContext* aCx, File& aFile, int aBytes, JS::MutableHandle<JSObject*> aRet, ErrorResult& aRv);
+  int Write(File& aFile, const Uint8Array& buffer, int aBytes);
+  int Close(File& aFile);
 
   // stat operations
   already_AddRefed<os::Stat> Stat(const nsAString& aPath, ErrorResult& aRv);
   already_AddRefed<os::Stat> Lstat(const nsAString& aPath, ErrorResult& aRv);
+
+  int RDONLY() const { return O_RDONLY; }
+  int WRONLY() const { return O_WRONLY; }
+  int RDWR() const { return O_RDWR; }
+  int APPEND() const { return O_APPEND; }
+  int IWRITE() const { return S_IWRITE; }
+  int IREAD() const { return S_IREAD; }
 
 protected:
   virtual ~OsManager() {

@@ -6,6 +6,7 @@ include protocol PBackground;
 include DOMTypes;
 
 using struct mozilla::SerializedStructuredCloneBuffer from "ipc/IPCMessageUtils.h";
+using struct Stat from "mozilla/dom/os/StatSerializer.h";
 
 namespace mozilla {
 namespace dom {
@@ -17,7 +18,8 @@ sync protocol POsFileChannel
   manager PBackground;
 
 parent:
-  sync Fopen(nsString path, nsString mode) returns (size_t file_ptr);
+  sync Open(nsString path, int access, int permission) returns (int fd);
+  /* sync Lstat(nsString path) returns (Stat sb); */
 
 child:
   __delete__();

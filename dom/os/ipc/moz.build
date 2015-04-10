@@ -7,6 +7,7 @@
 EXPORTS.mozilla.dom.os += [
     'OsFileChannelChild.h',
     'OsFileChannelParent.h',
+    'StatSerializer.h',
 ]
 
 SOURCES += [

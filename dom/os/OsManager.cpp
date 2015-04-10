@@ -53,27 +53,26 @@ OsManager::WrapObject(JSContext* aCx, JS::Handle<JSObject*> aGivenProto)
 }
 
 already_AddRefed<File>
-OsManager::Fopen(const nsAString& aPath, const nsAString& aMode, ErrorResult &aRv)
+OsManager::Open(const nsAString& aPath, int aAccess, int aPermission, ErrorResult &aRv)
 {
-  size_t file_ptr = 0;
-  bool ret = mActor->SendFopen((nsString&)aPath, (nsString&)aMode, &file_ptr);
+  // Where are we gonna do the security checks, here or in OsFileChannelParent
+
+  int fd = 0;
+  bool ret = mActor->SendOpen((nsString&)aPath, aAccess, aPermission, &fd);
   if (!ret) {
     aRv.Throw(NS_ERROR_FAILURE);
     return nullptr;
   }
 
-  nsRefPtr<File> file = new File(this, (FILE*)file_ptr);
+  nsRefPtr<File> file = new File(this, fd);
   return file.forget();
 }
 
 void
-OsManager::Fread(JSContext* aCx, int aBytes, File& aFile, JS::MutableHandle<JSObject*> aRet, ErrorResult& aRv)
+OsManager::Read(JSContext* aCx, File& aFile, int aBytes, JS::MutableHandle<JSObject*> aRet, ErrorResult& aRv)
 {
   unsigned char* buffer = (unsigned char*)malloc(aBytes + 1);
-  size_t bytes_read = fread(buffer, 1, aBytes, aFile.GetFilePtr());
-  
-  buffer[bytes_read] = '\0';
-  printf("read data from file '%s'\n", buffer);
+  size_t bytes_read = read(aFile.GetFd(), buffer, aBytes);
 
   JSObject* outView = nullptr;
   outView = Uint8Array::Create(aCx, bytes_read, buffer);
@@ -89,9 +88,15 @@ OsManager::Fread(JSContext* aCx, int aBytes, File& aFile, JS::MutableHandle<JSOb
 }
 
 int
-OsManager::Fclose(File& aFile)
+OsManager::Write(File& aFile, const Uint8Array& buffer, int aBytes)
 {
-  return fclose(aFile.GetFilePtr());
+  return 0;
+}
+
+int
+OsManager::Close(File& aFile)
+{
+  return close(aFile.GetFd());
 }
 
 already_AddRefed<os::Stat>
@@ -113,14 +118,22 @@ OsManager::Lstat(const nsAString& aPath, ErrorResult &aRv)
 already_AddRefed<os::Stat>
 OsManager::Stat(const nsAString& aPath, ErrorResult &aRv)
 {
-  char* real_path = realpath(NS_LossyConvertUTF16toASCII(aPath).get(), NULL);
+  int fd = 0;
+  mActor->SendOpen((nsString&)aPath, O_RDONLY, S_IREAD, &fd);
+
+  if (fd == -1) {
+    aRv.Throw(NS_ERROR_FAILURE); // file does not exist
+    return nullptr;
+  }
 
   struct stat sb;
-  if (stat(real_path, &sb) != 0) {
-    // todo: make a new error type
+  if (fstat(fd, &sb) != 0) {
+    close(fd);
     aRv.Throw(NS_ERROR_FAILURE);
     return nullptr;
   }
+
+  close(fd);
 
   nsRefPtr<os::Stat> stat = new os::Stat(this, sb);
   return stat.forget();

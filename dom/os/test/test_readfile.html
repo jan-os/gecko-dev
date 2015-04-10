@@ -2,7 +2,7 @@
 <html>
 <head>
   <meta charset="utf-8">
-  <title>os fopen test</title>
+  <title>os open test</title>
   <script type="text/javascript" src="/tests/SimpleTest/SimpleTest.js"></script>
   <link rel="stylesheet" type="text/css" href="/tests/SimpleTest/test.css" />
 </head>
@@ -19,9 +19,10 @@
     return new Promise((res, rej) => {
       var workerCode = `
         try {
-          var file = navigator.os.fopen("../../../../dom/os/test/payload.txt", "rb");
-          var data = navigator.os.fread(` + bytes + `, file);
-          var cr = navigator.os.fclose(file);
+          var file = navigator.os.open("../../../../dom/os/test/payload.txt",
+            navigator.os.RDONLY, navigator.os.IREAD);
+          var data = navigator.os.read(file, ` + bytes + `);
+          var cr = navigator.os.close(file);
 
           postMessage(JSON.stringify({
             hasFile: !!file,
@@ -30,8 +31,8 @@
           }));
         }
         catch (ex) {
-          dump("fopen err: " + ex);
-          postMessage("fopen err: " + ex);
+          dump("open err: " + ex);
+          postMessage("open err: " + ex);
         }
         `;
 
@@ -39,8 +40,8 @@
       var w = new Worker(URL.createObjectURL(workerBlob));
 
       w.onmessage = e => {
-        ok(e.data.indexOf('fopen err') === -1, 'ran successfully');
-        if (e.data.indexOf('fopen err') !== -1) {
+        ok(e.data.indexOf('open err') === -1, 'ran successfully');
+        if (e.data.indexOf('open err') !== -1) {
           dump(e.data + '\n');
           return res();
         }
