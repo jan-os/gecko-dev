@@ -120,8 +120,6 @@ struct ParamTraits<mozilla::dom::os::StatWrapper>
 
     aResult->SetWrappedObject(s, error);
 
-    // *aResult = *(new mozilla::dom::os::StatWrapper(s));
-
     return true;
   }
 };
