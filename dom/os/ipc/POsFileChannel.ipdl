@@ -18,8 +18,9 @@ sync protocol POsFileChannel
   manager PBackground;
 
 parent:
-  sync Open(nsString path, int access, int permission) returns (int fd);
+  sync Open(nsString path, int access, int permission) returns (FileDescriptor fd);
   sync Lstat(nsString path) returns (StatWrapper sb);
+  sync Stat(nsString path) returns (StatWrapper sb);
 
 child:
   __delete__();

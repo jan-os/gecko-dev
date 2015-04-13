@@ -2,7 +2,7 @@
 <html>
 <head>
   <meta charset="utf-8">
-  <title>os open test</title>
+  <title>os write test</title>
   <script type="text/javascript" src="/tests/SimpleTest/SimpleTest.js"></script>
   <link rel="stylesheet" type="text/css" href="/tests/SimpleTest/test.css" />
 </head>
@@ -15,23 +15,30 @@
   <script>
   var jsFuns = SpecialPowers.Cu.getJSTestingFunctions();
 
-  function runTest(bytes, expected) {
+  function runTest(expected) {
     return new Promise((res, rej) => {
       var workerCode = `
         try {
-          var file = navigator.os.open("../../../../dom/os/test/payload.txt",
-            navigator.os.RDONLY, navigator.os.IREAD);
-          var data = navigator.os.read(file, ` + bytes + `);
-          var cr = navigator.os.close(file);
+          var path = navigator.os.TEMP_DIR + '/test_writefile';
+          var file = navigator.os.open(path,
+            navigator.os.RDWR | navigator.os.CREAT, 0666);
+          var arr = new Uint8Array("` + expected + `".split('').map(c => c.charCodeAt(0)));
+          var written = navigator.os.write(file, arr);
+          var close1 = navigator.os.close(file);
+
+          file = navigator.os.open(path, navigator.os.RDONLY, navigator.os.IREAD);
+          var data = navigator.os.read(file, 200);
+          var close2 = navigator.os.close(file);
 
           postMessage(JSON.stringify({
-            hasFile: !!file,
             data: data.join(','),
-            closeRet: cr
+            written: written,
+            close1: close1,
+            close2: close2
           }));
         }
         catch (ex) {
-          postMessage("open err: " + ex);
+          postMessage("write err: " + ex);
         }
         `;
 
@@ -39,8 +46,8 @@
       var w = new Worker(URL.createObjectURL(workerBlob));
 
       w.onmessage = e => {
-        ok(e.data.indexOf('open err') === -1, 'ran successfully');
-        if (e.data.indexOf('open err') !== -1) {
+        ok(e.data.indexOf('write err') === -1, 'ran successfully');
+        if (e.data.indexOf('write err') !== -1) {
           dump(e.data + '\n');
           return res();
         }
@@ -52,14 +59,14 @@
           ok(null, ex, fn + ' is valid JSON');
         }
 
-        ok(data.hasFile === true, 'hasFile');
-
+        ok(data.written === expected.length, 'written. exp: ' + expected.length + ', was: ' + data.written);
         var expectedData = expected.split('').map(c=>c.charCodeAt(0)).join(',');
         if (data.data !== expectedData) {
           dump('expected "' + expectedData + '", but was "' + data.data + '"\n');
         }
         ok(data.data === expectedData, 'data');
-        ok(data.closeRet === 0, 'closeRet (exp. 0, was ' + data.closeRet + ')');
+        ok(data.close1 === 0, 'close1');
+        ok(data.close2 === 0, 'close2');
 
         res();
       };
@@ -69,8 +76,7 @@
   SimpleTest.waitForExplicitFinish();
 
   Promise.all([
-    runTest(20, 'This is data that yo'),
-    runTest(2000, 'This is data that you can read through the APIs!') // read too much data
+    runTest('Hello world')
   ]).then(() => {
     SimpleTest.finish();
   });

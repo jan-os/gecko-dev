@@ -4,20 +4,35 @@ interface OsManager {
   OsManagerFile open(DOMString path, long access, long permission);
   [Throws]
   Uint8Array read(OsManagerFile file, long bytes);
-  long write(OsManagerFile file, Uint8Array buffer, long bytes);
+  [Throws]
+  long write(OsManagerFile file, Uint8Array buffer);
   long close(OsManagerFile file);
 
   [Throws]
   OsManagerStat lstat(DOMString path);
   [Throws]
   OsManagerStat stat(DOMString path);
+  [Throws]
+  OsManagerStat fstat(OsManagerFile file);
 
   readonly attribute long RDONLY;
   readonly attribute long WRONLY;
   readonly attribute long RDWR;
   readonly attribute long APPEND;
+  readonly attribute long CREAT;
+  readonly attribute long DSYNC;
+  readonly attribute long EXCL;
+  readonly attribute long NOCTTY;
+  readonly attribute long NONBLOCK;
+  readonly attribute long SYNC;
+  readonly attribute long TRUNC;
+
   readonly attribute long IWRITE;
   readonly attribute long IREAD;
+
+  // Should have some attribute in manifest that specifies access to this
+  // dir... As it's platform specific.
+  readonly attribute DOMString TEMP_DIR;
 };
 
 [Exposed=(Worker,System)]

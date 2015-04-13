@@ -4,6 +4,7 @@
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 #include <algorithm>
+#include <errno.h>
 #include <limits>
 #include <stdio.h>
 #include <sys/stat.h>
@@ -13,6 +14,7 @@
 #include "mozilla/dom/OsManagerBinding.h"
 #include "mozilla/ipc/BackgroundChild.h"
 #include "mozilla/ipc/BackgroundUtils.h"
+#include "mozilla/ipc/FileDescriptor.h"
 #include "mozilla/ipc/PBackgroundChild.h"
 #include "nsIDOMClassInfo.h"
 #include "OsManager.h"
@@ -21,6 +23,8 @@
 namespace mozilla {
 namespace dom {
 namespace os {
+
+using mozilla::ipc::FileDescriptor;
 
 NS_IMPL_ADDREF_INHERITED(OsManager, DOMEventTargetHelper)
 NS_IMPL_RELEASE_INHERITED(OsManager, DOMEventTargetHelper)
@@ -56,16 +60,16 @@ OsManager::WrapObject(JSContext* aCx, JS::Handle<JSObject*> aGivenProto)
 already_AddRefed<File>
 OsManager::Open(const nsAString& aPath, int aAccess, int aPermission, ErrorResult &aRv)
 {
-  // Where are we gonna do the security checks, here or in OsFileChannelParent
+  // Where are we gonna do the security checks, here or in OsFileChannelParent?
 
-  int fd = 0;
+  FileDescriptor fd = {};
   bool ret = mActor->SendOpen((nsString&)aPath, aAccess, aPermission, &fd);
   if (!ret) {
     aRv.Throw(NS_ERROR_FAILURE);
     return nullptr;
   }
 
-  nsRefPtr<File> file = new File(this, fd);
+  nsRefPtr<File> file = new File(this, fd.PlatformHandle());
   return file.forget();
 }
 
@@ -89,9 +93,15 @@ OsManager::Read(JSContext* aCx, File& aFile, int aBytes, JS::MutableHandle<JSObj
 }
 
 int
-OsManager::Write(File& aFile, const Uint8Array& buffer, int aBytes)
+OsManager::Write(File& aFile, const Uint8Array& aBuffer, ErrorResult &aRv)
 {
-  return 0;
+  aBuffer.ComputeLengthAndData();
+  int ret = write(aFile.GetFd(), aBuffer.Data(), aBuffer.Length());
+  if (ret == -1) {
+    printf("write failed %d\n", errno);
+    aRv.Throw(NS_ERROR_FAILURE);
+  }
+  return ret;
 }
 
 int
@@ -116,24 +126,24 @@ OsManager::Lstat(const nsAString& aPath, ErrorResult &aRv)
 already_AddRefed<os::Stat>
 OsManager::Stat(const nsAString& aPath, ErrorResult &aRv)
 {
-  int fd = 0;
-  mActor->SendOpen((nsString&)aPath, O_RDONLY, S_IREAD, &fd);
+  StatWrapper* sw = new StatWrapper();
+  mActor->SendStat((nsString&)aPath, sw);
 
-  if (fd == -1) {
-    aRv.Throw(NS_ERROR_FAILURE); // file does not exist
-    return nullptr;
-  }
+  nsRefPtr<os::Stat> stat = new os::Stat(this, sw->GetWrappedObject());
 
+  free(sw);
+
+  return stat.forget();
+}
+
+already_AddRefed<os::Stat>
+OsManager::Fstat(const File& aFile, ErrorResult &aRv)
+{
   struct stat sb;
-  if (fstat(fd, &sb) != 0) {
-    close(fd);
-    aRv.Throw(NS_ERROR_FAILURE);
-    return nullptr;
-  }
-
-  close(fd);
+  fstat(aFile.GetFd(), &sb);
 
   nsRefPtr<os::Stat> stat = new os::Stat(this, sb);
+
   return stat.forget();
 }
 
