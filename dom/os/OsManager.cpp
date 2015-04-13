@@ -48,19 +48,41 @@ OsManager::WrapObject(JSContext* aCx, JS::Handle<JSObject*> aGivenProto)
   return OsManagerBinding::Wrap(aCx, this, aGivenProto);
 }
 
-already_AddRefed<File>
-OsManager::Open(const nsAString& aPath, int aAccess, int aPermission, ErrorResult &aRv)
+void
+OsManager::HandleErrno(int aErr, ErrorResult& aRv)
 {
+  AutoJSAPI jsapi;
+  if (!jsapi.Init(mScope)) {
+    aRv.Throw(NS_ERROR_FAILURE);
+    return;
+  }
+  auto cx = jsapi.cx();
+
+  JSString* strErr = JS_NewStringCopyZ(cx, strerror(aErr));
+  JS::Rooted<JS::Value> valErr(cx, STRING_TO_JSVAL(strErr));
+  aRv.ThrowJSException(cx, valErr);
+  return;
+}
+
+already_AddRefed<File>
+OsManager::Open(const nsAString& aPath, int aAccess, int aPermission, ErrorResult& aRv)
+{
+  aRv.MightThrowJSException();
   // Where are we gonna do the security checks, here or in OsFileChannelParent?
 
-  FileDescriptor fd = {};
-  bool ret = mActor->SendOpen((nsString&)aPath, aAccess, aPermission, &fd);
+  FileDescriptorResponse fdr = {};
+  bool ret = mActor->SendOpen((nsString&)aPath, aAccess, aPermission, &fdr);
   if (!ret) {
     aRv.Throw(NS_ERROR_FAILURE);
     return nullptr;
   }
 
-  nsRefPtr<File> file = new File(this, fd.PlatformHandle());
+  if (fdr.error() != 0) {
+    HandleErrno(fdr.error(), aRv);
+    return nullptr;
+  }
+
+  nsRefPtr<File> file = new File(this, fdr.fd().PlatformHandle());
   return file.forget();
 }
 
@@ -69,6 +91,10 @@ OsManager::Read(JSContext* aCx, File& aFile, int aBytes, JS::MutableHandle<JSObj
 {
   unsigned char* buffer = (unsigned char*)malloc(aBytes + 1);
   size_t bytes_read = read(aFile.GetFd(), buffer, aBytes);
+  if (bytes_read == (size_t)-1) {
+    HandleErrno(errno, aRv);
+    return;
+  }
 
   JSObject* outView = nullptr;
   outView = Uint8Array::Create(aCx, bytes_read, buffer);
@@ -89,23 +115,36 @@ OsManager::Write(File& aFile, const Uint8Array& aBuffer, ErrorResult &aRv)
   aBuffer.ComputeLengthAndData();
   int ret = write(aFile.GetFd(), aBuffer.Data(), aBuffer.Length());
   if (ret == -1) {
-    printf("write failed %d\n", errno);
-    aRv.Throw(NS_ERROR_FAILURE);
+    HandleErrno(errno, aRv);
+    return -1;
   }
   return ret;
 }
 
 int
-OsManager::Close(File& aFile)
+OsManager::Close(File& aFile, ErrorResult& aRv)
 {
-  return close(aFile.GetFd());
+  if (close(aFile.GetFd()) == -1) {
+    HandleErrno(errno, aRv);
+    return -1;
+  }
+  return 0;
 }
 
 already_AddRefed<os::Stat>
-OsManager::Lstat(const nsAString& aPath, ErrorResult &aRv)
+OsManager::Lstat(const nsAString& aPath, ErrorResult& aRv)
 {
   StatWrapper* sw = new StatWrapper();
-  mActor->SendLstat((nsString&)aPath, sw);
+  bool ret = mActor->SendLstat((nsString&)aPath, sw);
+  if (!ret) {
+    aRv.Throw(NS_ERROR_FAILURE);
+    return nullptr;
+  }
+
+  if (sw->GetError() != 0) {
+    HandleErrno(sw->GetError(), aRv);
+    return nullptr;
+  }
 
   nsRefPtr<os::Stat> stat = new os::Stat(this, sw->GetWrappedObject());
 
@@ -115,10 +154,19 @@ OsManager::Lstat(const nsAString& aPath, ErrorResult &aRv)
 }
 
 already_AddRefed<os::Stat>
-OsManager::Stat(const nsAString& aPath, ErrorResult &aRv)
+OsManager::Stat(const nsAString& aPath, ErrorResult& aRv)
 {
   StatWrapper* sw = new StatWrapper();
-  mActor->SendStat((nsString&)aPath, sw);
+  bool ret = mActor->SendStat((nsString&)aPath, sw);
+  if (!ret) {
+    aRv.Throw(NS_ERROR_FAILURE);
+    return nullptr;
+  }
+
+  if (sw->GetError() != 0) {
+    HandleErrno(sw->GetError(), aRv);
+    return nullptr;
+  }
 
   nsRefPtr<os::Stat> stat = new os::Stat(this, sw->GetWrappedObject());
 
@@ -128,10 +176,13 @@ OsManager::Stat(const nsAString& aPath, ErrorResult &aRv)
 }
 
 already_AddRefed<os::Stat>
-OsManager::Fstat(const File& aFile, ErrorResult &aRv)
+OsManager::Fstat(const File& aFile, ErrorResult& aRv)
 {
   struct stat sb;
-  fstat(aFile.GetFd(), &sb);
+  if (fstat(aFile.GetFd(), &sb) == -1) {
+    HandleErrno(errno, aRv);
+    return nullptr;
+  }
 
   nsRefPtr<os::Stat> stat = new os::Stat(this, sb);
 

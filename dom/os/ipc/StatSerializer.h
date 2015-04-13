@@ -13,13 +13,15 @@ class StatWrapper final {
 public:
   StatWrapper() {}
 
-  StatWrapper(struct stat aStat)
+  StatWrapper(struct stat aStat, int aError)
     : mStat(aStat)
+    , mError(aError)
   {}
 
-  void SetWrappedObject(struct stat aStat)
+  void SetWrappedObject(struct stat aStat, int aError)
   {
     mStat = aStat;
+    mError = aError;
   }
 
   struct stat GetWrappedObject() const
@@ -27,8 +29,14 @@ public:
     return mStat;
   }
 
+  int GetError() const
+  {
+    return mError;
+  }
+
 private:
   struct stat mStat;
+  int mError = 0;
 };
 }
 }
@@ -57,6 +65,7 @@ struct ParamTraits<mozilla::dom::os::StatWrapper>
     WriteParam(aMsg, s.st_atime);
     WriteParam(aMsg, s.st_mtime);
     WriteParam(aMsg, s.st_ctime);
+    WriteParam(aMsg, aParam.GetError());
   }
 
   static bool Read(const Message *aMsg, void **aIter, paramType* aResult)
@@ -74,6 +83,7 @@ struct ParamTraits<mozilla::dom::os::StatWrapper>
     time_t atime = 0;
     time_t mtime = 0;
     time_t ctime = 0;
+    int error = 0;
 
     if (!ReadParam(aMsg, aIter, &dev) ||
         !ReadParam(aMsg, aIter, &ino) ||
@@ -87,7 +97,8 @@ struct ParamTraits<mozilla::dom::os::StatWrapper>
         !ReadParam(aMsg, aIter, &blocks) ||
         !ReadParam(aMsg, aIter, &atime) ||
         !ReadParam(aMsg, aIter, &mtime) ||
-        !ReadParam(aMsg, aIter, &ctime)) {
+        !ReadParam(aMsg, aIter, &ctime) ||
+        !ReadParam(aMsg, aIter, &error)) {
       return false;
     }
 
@@ -107,7 +118,9 @@ struct ParamTraits<mozilla::dom::os::StatWrapper>
       .st_ctime = ctime
     };
 
-    *aResult = *(new mozilla::dom::os::StatWrapper(s));
+    aResult->SetWrappedObject(s, error);
+
+    // *aResult = *(new mozilla::dom::os::StatWrapper(s));
 
     return true;
   }

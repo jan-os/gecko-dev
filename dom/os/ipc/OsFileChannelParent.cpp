@@ -27,7 +27,7 @@ OsFileChannelParent::~OsFileChannelParent()
 }
 
 bool
-OsFileChannelParent::RecvOpen(const nsString& aPath, const int& aAccess, const int& aPermission, FileDescriptor* aFd)
+OsFileChannelParent::RecvOpen(const nsString& aPath, const int& aAccess, const int& aPermission, FileDescriptorResponse* aFd)
 {
   AssertIsOnBackgroundThread();
 
@@ -37,12 +37,10 @@ OsFileChannelParent::RecvOpen(const nsString& aPath, const int& aAccess, const i
   const char* real_path = NS_LossyConvertUTF16toASCII(aPath).get();
 
   int fd = open(real_path, aAccess, aPermission);
-  *aFd = FileDescriptor(fd);
+  *aFd = *(new FileDescriptorResponse(FileDescriptor(fd), fd == -1 ? errno : 0));
   // free(real_path);
 
-  // @todo: create a struct that holds fd & errno, so we can handle this properly
-  // in the Child
-  return true; // -1 is valid return value here
+  return true;
 }
 
 bool
@@ -52,10 +50,13 @@ OsFileChannelParent::RecvStat(const nsString& aPath, StatWrapper* aRetval)
 
   char* real_path = realpath(NS_LossyConvertUTF16toASCII(aPath).get(), NULL);
 
+  int error = 0;
   struct stat sb;
-  stat(real_path, &sb);
+  if (stat(real_path, &sb) == -1) {
+    error = errno;
+  }
 
-  *aRetval = *(new StatWrapper(sb));
+  *aRetval = *(new StatWrapper(sb, error));
 
   free(real_path);
 
@@ -69,10 +70,13 @@ OsFileChannelParent::RecvLstat(const nsString& aPath, StatWrapper* aRetval)
 
   char* real_path = realpath(NS_LossyConvertUTF16toASCII(aPath).get(), NULL);
 
+  int error = 0;
   struct stat sb;
-  lstat(real_path, &sb);
+  if (lstat(real_path, &sb) == -1) {
+    error = errno;
+  }
 
-  *aRetval = *(new StatWrapper(sb));
+  *aRetval = *(new StatWrapper(sb, error));
 
   free(real_path);
 

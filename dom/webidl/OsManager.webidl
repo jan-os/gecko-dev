@@ -6,6 +6,7 @@ interface OsManager {
   Uint8Array read(OsManagerFile file, long bytes);
   [Throws]
   long write(OsManagerFile file, Uint8Array buffer);
+  [Throws]
   long close(OsManagerFile file);
 
   [Throws]

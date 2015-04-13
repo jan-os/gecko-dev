@@ -28,8 +28,6 @@
           var stat3 = navigator.os.fstat(fd);
           navigator.os.close(fd);
 
-          dump('tmp dir is ' + navigator.os.TEMP_DIR);
-
           var data = JSON.stringify([stat1, stat2, stat3].map(function(stat) {
             return {
               mode: stat.mode,

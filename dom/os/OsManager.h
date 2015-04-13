@@ -47,7 +47,7 @@ public:
   already_AddRefed<File> Open(const nsAString& aPath, int aAccess, int aPermission, ErrorResult& aRv);
   void Read(JSContext* aCx, File& aFile, int aBytes, JS::MutableHandle<JSObject*> aRet, ErrorResult& aRv);
   int Write(File& aFile, const Uint8Array& buffer, ErrorResult& aRv);
-  int Close(File& aFile);
+  int Close(File& aFile, ErrorResult& aRv);
 
   // stat operations
   already_AddRefed<os::Stat> Stat(const nsAString& aPath, ErrorResult& aRv);
@@ -85,6 +85,7 @@ protected:
   }
 
 private:
+  void HandleErrno(int aErr, ErrorResult& aRv);
   POsFileChannelChild* mActor;
   workers::WorkerGlobalScope* mScope;
 };

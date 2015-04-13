@@ -26,7 +26,7 @@ private:
   OsFileChannelParent();
   ~OsFileChannelParent();
 
-  virtual bool RecvOpen(const nsString& aPath, const int& aAccess, const int& aPermission, FileDescriptor* aFd) override;
+  virtual bool RecvOpen(const nsString& aPath, const int& aAccess, const int& aPermission, FileDescriptorResponse* aFd) override;
   virtual bool RecvLstat(const nsString& aPath, StatWrapper* aRetval) override;
   virtual bool RecvStat(const nsString& aPath, StatWrapper* aRetval) override;
 

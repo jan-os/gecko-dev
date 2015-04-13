@@ -8,6 +8,11 @@ include DOMTypes;
 using struct mozilla::SerializedStructuredCloneBuffer from "ipc/IPCMessageUtils.h";
 using mozilla::dom::os::StatWrapper from "mozilla/dom/os/StatSerializer.h";
 
+struct FileDescriptorResponse {
+  FileDescriptor fd;
+  int error;
+};
+
 namespace mozilla {
 namespace dom {
 namespace os {
@@ -18,7 +23,7 @@ sync protocol POsFileChannel
   manager PBackground;
 
 parent:
-  sync Open(nsString path, int access, int permission) returns (FileDescriptor fd);
+  sync Open(nsString path, int access, int permission) returns (FileDescriptorResponse fd);
   sync Lstat(nsString path) returns (StatWrapper sb);
   sync Stat(nsString path) returns (StatWrapper sb);
 
