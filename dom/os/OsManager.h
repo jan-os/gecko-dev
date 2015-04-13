@@ -34,9 +34,6 @@ public:
 
   explicit OsManager(workers::WorkerGlobalScope* aScope);
 
-  static already_AddRefed<OsManager> Constructor(GlobalObject& aGlobal,
-                                                 ErrorResult& aRv);
-
   void Init();
   void Shutdown();
 

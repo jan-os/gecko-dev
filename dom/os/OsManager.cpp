@@ -42,15 +42,6 @@ OsManager::OsManager(workers::WorkerGlobalScope* aScope)
   MOZ_ASSERT(mActor);
 }
 
-already_AddRefed<OsManager>
-OsManager::Constructor(GlobalObject& aGlobal, ErrorResult& aRv)
-{
-  // We don't allow Gecko to create OsManager through JS codes like
-  // window.OsManager() on the worker, so disable this for now.
-  NS_NOTREACHED("Cannot use the chrome constructor on the worker!");
-  return nullptr;
-}
-
 JSObject*
 OsManager::WrapObject(JSContext* aCx, JS::Handle<JSObject*> aGivenProto)
 {
