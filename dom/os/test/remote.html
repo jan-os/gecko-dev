@@ -1,0 +1,31 @@
+<html>
+  <head></head>
+  <body>
+    <script type="application/javascript;version=1.7">
+    var workerCode = `
+      try {
+        var file = navigator.os.open("../../../../dom/os/test/payload.txt",
+          navigator.os.RDONLY, navigator.os.IREAD);
+        var data = navigator.os.read(file, 100);
+        var cr = navigator.os.close(file);
+  
+        postMessage(JSON.stringify({
+          hasFile: !!file,
+          data: data.join(','),
+          closeRet: cr
+        }));
+      }
+      catch (ex) {
+        postMessage("open err: " + ex);
+      }
+      `;
+    
+    var workerBlob = new Blob([workerCode], { type: 'application/javascript' });
+    var w = new Worker(URL.createObjectURL(workerBlob));
+
+    w.onmessage = e => {
+      alert(e.data);
+    };
+    </script>
+  </body>
+</html>
