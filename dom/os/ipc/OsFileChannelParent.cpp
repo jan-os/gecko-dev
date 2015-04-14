@@ -4,6 +4,7 @@
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 #include <errno.h>
+#include <libgen.h>
 #include "mozilla/ipc/BackgroundParent.h"
 #include "mozilla/unused.h"
 #include "OsFileChannelParent.h"
@@ -27,18 +28,66 @@ OsFileChannelParent::~OsFileChannelParent()
 }
 
 bool
+OsFileChannelParent::VerifyRights(const char* aPath)
+{
+  // first make a normal char* out of aPath
+  int aPathLen = strlen(aPath);
+  char* org_path = (char*)malloc(aPathLen + 1);
+  for (int ix = 0; ix < aPathLen; ix++) {
+    org_path[ix] = aPath[ix];
+  }
+  org_path[aPathLen] = '\0';
+
+  // use path while calling dirname, keep org_path to free later
+  char* path = org_path;
+
+  // do a real_path call on path
+  char* real_path;
+  while ((real_path = realpath(path, NULL)) == NULL) {
+    // if it's NULL that means that we have an issue
+    // when ENOENT we check parent directory (and up and up, etc.)
+    // when something else, break and return false
+    if (errno != ENOENT) {
+      printf("VerifyRights for '%s' failed with %d (%s)\n", org_path, errno, strerror(errno));
+      free(org_path);
+      return false;
+    }
+
+    // dirname changes the pointer you feed into it so we need to copy it first
+    char* old_path = (char*)malloc(strlen(path) + 1);
+    strcpy(old_path, path);
+
+    path = dirname(path);
+
+    if (strcmp(path, old_path) == 0) { // ended at invalid root point
+      free(old_path);
+      free(org_path);
+      return false;
+    }
+
+    free(old_path);
+  }
+
+  // not null? then success! real_path is the path we need to check
+
+  free(real_path);
+  free(org_path);
+  return true;
+}
+
+bool
 OsFileChannelParent::RecvOpen(const nsString& aPath, const int& aAccess, const int& aPermission, FileDescriptorResponse* aFd)
 {
   AssertIsOnBackgroundThread();
 
-  // realpath with NULL as second param does malloc()
-  // @todo: problem with realpath is that when it doesnt exist it makes it NULL...
-  // char* real_path = realpath(NS_LossyConvertUTF16toASCII(aPath).get(), NULL);
-  const char* real_path = NS_LossyConvertUTF16toASCII(aPath).get();
+  auto path = NS_LossyConvertUTF16toASCII(aPath).get();
+  if (!VerifyRights(path)) {
+    *aFd = *(new FileDescriptorResponse(FileDescriptor(), EACCES));
+    return true;
+  }
 
-  int fd = open(real_path, aAccess, aPermission);
+  int fd = open(path, aAccess, aPermission);
   *aFd = *(new FileDescriptorResponse(FileDescriptor(fd), fd == -1 ? errno : 0));
-  // free(real_path);
 
   return true;
 }
@@ -48,10 +97,21 @@ OsFileChannelParent::RecvStat(const nsString& aPath, StatWrapper* aRetval)
 {
   AssertIsOnBackgroundThread();
 
-  char* real_path = realpath(NS_LossyConvertUTF16toASCII(aPath).get(), NULL);
+  struct stat sb;
+
+  auto path = NS_LossyConvertUTF16toASCII(aPath).get();
+  if (!VerifyRights(path)) {
+    *aRetval = *(new StatWrapper(sb, EACCES));
+    return true;
+  }
+
+  char* real_path = realpath(path, NULL);
+  if (real_path == NULL) {
+    *aRetval = *(new StatWrapper(sb, errno));
+    return true;
+  }
 
   int error = 0;
-  struct stat sb;
   if (stat(real_path, &sb) == -1) {
     error = errno;
   }
@@ -68,10 +128,21 @@ OsFileChannelParent::RecvLstat(const nsString& aPath, StatWrapper* aRetval)
 {
   AssertIsOnBackgroundThread();
 
-  char* real_path = realpath(NS_LossyConvertUTF16toASCII(aPath).get(), NULL);
+  struct stat sb;
+
+  auto path = NS_LossyConvertUTF16toASCII(aPath).get();
+  if (!VerifyRights(path)) {
+    *aRetval = *(new StatWrapper(sb, EACCES));
+    return true;
+  }
+
+  char* real_path = realpath(path, NULL);
+  if (real_path == NULL) {
+    *aRetval = *(new StatWrapper(sb, errno));
+    return true;
+  }
 
   int error = 0;
-  struct stat sb;
   if (lstat(real_path, &sb) == -1) {
     error = errno;
   }

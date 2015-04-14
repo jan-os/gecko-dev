@@ -28,15 +28,32 @@
           var stat3 = navigator.os.fstat(fd);
           navigator.os.close(fd);
 
-          var data = JSON.stringify([stat1, stat2, stat3].map(function(stat) {
+          var stat4, stat5;
+          try {
+            navigator.os.stat("/completely/non/existing/file");
+          }
+          catch (ex) {
+            stat4 = ex;
+          }
+          try {
+            navigator.os.stat("../completely/non/existing");
+          }
+          catch (ex) {
+            stat5 = ex;
+          }
+
+          var data = [stat1, stat2, stat3].map(function(stat) {
             return {
               mode: stat.mode,
               isFile: stat.isFile(),
               isDir: stat.isDirectory()
             };
-          }));
+          });
 
-          postMessage(data);
+          data[3] = stat4;
+          data[4] = stat5;
+
+          postMessage(JSON.stringify(data));
         }
         catch (ex) {
           postMessage("stat err: " + ex);
@@ -66,6 +83,15 @@
           ok((data[i].mode & 0170000) != 0040000, i + ' isDir');
           ok(data[i].isFile, i + ' isFile2');
           ok(!data[i].isDir, i + ' isDir2');
+        }
+
+        ok(data[3] === 'No such file or directory', 'stat4');
+        if (data[3] !== 'No such file or directory') {
+          dump('stat4 is "' + data[3] + '"\n');
+        }
+        ok(data[4] === 'No such file or directory', 'stat5');
+        if (data[4] !== 'No such file or directory') {
+          dump('stat5 is "' + data[4] + '"\n');
         }
 
         res();

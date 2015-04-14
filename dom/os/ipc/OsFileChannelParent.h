@@ -26,6 +26,8 @@ private:
   OsFileChannelParent();
   ~OsFileChannelParent();
 
+  bool VerifyRights(const char* aPath);
+
   virtual bool RecvOpen(const nsString& aPath, const int& aAccess, const int& aPermission, FileDescriptorResponse* aFd) override;
   virtual bool RecvLstat(const nsString& aPath, StatWrapper* aRetval) override;
   virtual bool RecvStat(const nsString& aPath, StatWrapper* aRetval) override;
