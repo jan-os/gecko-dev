@@ -1,20 +1,33 @@
 [Exposed=(Worker,System)]
 interface OsManager {
   [Throws]
-  OsManagerFile open(DOMString path, long access, long permission);
+  OsManagerFd open(DOMString path, long access, long permission);
   [Throws]
-  Uint8Array read(OsManagerFile file, long bytes);
+  Uint8Array read(OsManagerFd fd, long bytes);
   [Throws]
-  long write(OsManagerFile file, Uint8Array buffer);
+  long write(OsManagerFd fd, Uint8Array buffer);
   [Throws]
-  long close(OsManagerFile file);
+  long close(OsManagerFd fd);
 
   [Throws]
   OsManagerStat lstat(DOMString path);
   [Throws]
   OsManagerStat stat(DOMString path);
   [Throws]
-  OsManagerStat fstat(OsManagerFile file);
+  OsManagerStat fstat(OsManagerFd fd);
+
+  /* Missing according to emscripten:
+   * chmod
+   * utimes
+   * truncate
+   * mkdir (open?)
+   * rename
+   * unlink
+   * rmdir
+   * readdir
+   * symlink
+   * readlink
+   */
 
   readonly attribute long RDONLY;
   readonly attribute long WRONLY;
@@ -62,4 +75,4 @@ interface OsManagerStat {
 };
 
 [Exposed=(Worker,System)]
-interface OsManagerFile {};
+interface OsManagerFd {};

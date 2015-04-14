@@ -33,7 +33,7 @@ public:
   JSObject*
   WrapObject(JSContext* aCx, JS::Handle<JSObject*> aGivenProto)
   {
-    return OsManagerFileBinding::Wrap(aCx, this, aGivenProto);
+    return OsManagerFdBinding::Wrap(aCx, this, aGivenProto);
   }
 
   int GetFd() const
