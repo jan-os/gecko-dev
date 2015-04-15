@@ -5,6 +5,7 @@
 
 #include <errno.h>
 #include <libgen.h>
+#include <sys/time.h>
 #include "mozilla/ipc/BackgroundParent.h"
 #include "mozilla/unused.h"
 #include "OsFileChannelParent.h"
@@ -200,6 +201,65 @@ OsFileChannelParent::RecvChmod(const nsString& aPath, const int& aPermission, in
   return true;
 }
 
+bool
+OsFileChannelParent::RecvUtimes(const nsString& aPath, const double& aActime, const double& aModtime, int* aRetval) {
+  AssertIsOnBackgroundThread();
+
+  auto path = NS_LossyConvertUTF16toASCII(aPath).get();
+  if (!VerifyRights(path)) {
+    *aRetval = EACCES;
+    return true;
+  }
+
+  struct timeval tv[2];
+  tv[0] = {
+    .tv_sec = ((time_t)floor(aActime)) / 1000,
+    .tv_usec = (suseconds_t)(((long)floor(aActime)) % 1000) * 1000
+  };
+  tv[1] = {
+    .tv_sec = ((time_t)floor(aModtime)) / 1000,
+    .tv_usec = (suseconds_t)(((long)floor(aModtime)) % 1000) * 1000
+  };
+
+  if (utimes(path, tv) == -1) {
+    *aRetval = errno;
+  }
+  else {
+    *aRetval = 0;
+  }
+
+  return true;
+}
+
+bool
+OsFileChannelParent::RecvLutimes(const nsString& aPath, const double& aActime, const double& aModtime, int* aRetval) {
+  AssertIsOnBackgroundThread();
+
+  auto path = NS_LossyConvertUTF16toASCII(aPath).get();
+  if (!VerifyRights(path)) {
+    *aRetval = EACCES;
+    return true;
+  }
+
+  struct timeval tv[2];
+  tv[0] = {
+    .tv_sec = ((time_t)floor(aActime)) / 1000,
+    .tv_usec = (suseconds_t)(((long)floor(aActime)) % 1000) * 1000
+  };
+  tv[1] = {
+    .tv_sec = ((time_t)floor(aModtime)) / 1000,
+    .tv_usec = (suseconds_t)(((long)floor(aModtime)) % 1000) * 1000
+  };
+
+  if (lutimes(path, tv) == -1) {
+    *aRetval = errno;
+  }
+  else {
+    *aRetval = 0;
+  }
+
+  return true;
+}
 
 void
 OsFileChannelParent::ActorDestroy(ActorDestroyReason aWhy)

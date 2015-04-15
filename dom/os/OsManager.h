@@ -27,6 +27,8 @@ namespace mozilla {
 namespace dom {
 namespace os {
 
+using mozilla::dom::Date;
+
 class OsManager final : public DOMEventTargetHelper
 {
 public:
@@ -49,17 +51,19 @@ public:
   int Write(File& aFile, const Uint8Array& buffer, ErrorResult& aRv);
   int Close(File& aFile, ErrorResult& aRv);
 
+  void Chmod(const nsAString& aPath, int aMode, ErrorResult& aRv);
+  void Fchmod(const File& aFile, int aMode, ErrorResult& aRv);
+
+  void Unlink(const nsAString& aPath, ErrorResult& aRv);
+
+  void Utimes(const nsAString& aPath, const Date& aActime, const Date& aModtime, ErrorResult& aRv);
+  void Lutimes(const nsAString& aPath, const Date& aActime, const Date& aModtime, ErrorResult& aRv);
+  void Futimes(File& aFile, const Date& aActime, const Date& aModtime, ErrorResult& aRv);
+
   // stat operations
   already_AddRefed<os::Stat> Stat(const nsAString& aPath, ErrorResult& aRv);
   already_AddRefed<os::Stat> Lstat(const nsAString& aPath, ErrorResult& aRv);
   already_AddRefed<os::Stat> Fstat(const File& aFile, ErrorResult& aRv);
-
-  // chmod operations
-  void Chmod(const nsAString& aPath, int aMode, ErrorResult& aRv);
-  void Fchmod(const File& aFile, int aMode, ErrorResult& aRv);
-
-  // unlink operations
-  void Unlink(const nsAString& aPath, ErrorResult& aRv);
 
   // Open flags
   int RDONLY() const { return O_RDONLY; }

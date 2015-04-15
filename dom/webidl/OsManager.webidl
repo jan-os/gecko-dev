@@ -24,8 +24,14 @@ interface OsManager {
   [Throws]
   void unlink(DOMString path);
 
+  [Throws]
+  void utimes(DOMString path, Date actime, Date modtime);
+  [Throws]
+  void lutimes(DOMString path, Date actime, Date modtime);
+  [Throws]
+  void futimes(OsManagerFd fd, Date actime, Date modtime);
+
   /* Missing according to emscripten:
-   * utimes
    * truncate
    * mkdir (open?)
    * rename
@@ -34,6 +40,9 @@ interface OsManager {
    * readdir
    * symlink
    * readlink
+   *
+   * Other stuff
+   * lseek
    */
 
   readonly attribute long RDONLY;

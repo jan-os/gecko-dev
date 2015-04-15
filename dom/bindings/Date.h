@@ -21,7 +21,9 @@ public:
   Date() {}
   explicit Date(JS::ClippedTime aMilliseconds)
     : mMsecSinceEpoch(aMilliseconds)
-  {}
+  {
+    printf("Ctor date %f\n", aMilliseconds);
+  }
 
   bool IsUndefined() const
   {

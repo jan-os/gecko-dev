@@ -1,0 +1,104 @@
+<!DOCTYPE HTML>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>os utime test</title>
+  <script type="text/javascript" src="/tests/SimpleTest/SimpleTest.js"></script>
+  <link rel="stylesheet" type="text/css" href="/tests/SimpleTest/test.css" />
+</head>
+<body>
+  <a target="_blank" href="https://bugzilla.mozilla.org/show_bug.cgi?id=1141021">os tests</a>
+  <p id="display"></p>
+  <div id="content" style="display: none"></div>
+  <pre id="test"></pre>
+
+  <script>
+  var jsFuns = SpecialPowers.Cu.getJSTestingFunctions();
+
+  function runTest() {
+    return new Promise((res, rej) => {
+      var workerCode = `
+        try {
+          var path = navigator.os.TEMP_DIR + '/test_utime';
+          try {
+            navigator.os.unlink(path);
+          }
+          catch (ex) {}
+
+          var file = navigator.os.open(path, navigator.os.RDWR | navigator.os.CREAT,
+            navigator.os.IRWXU);
+          var d1 = new Date(Date.UTC(1988, 7, 31, 12, 14, 17));
+          d1.setMilliseconds(432);
+          var d2 = new Date(Date.UTC(1990, 8, 17, 14, 11, 9));
+          d2.setMilliseconds(877);
+          navigator.os.futimes(file, d1, d2);
+          navigator.os.close(file);
+
+          var stat1 = navigator.os.stat(path);
+          var dates1 = [ stat1.atime.toISOString(), stat1.mtime.toISOString() ];
+
+          navigator.os.utimes(path, new Date(Date.UTC(2011, 9, 13, 8, 7, 6)),
+            new Date(Date.UTC(2013, 7, 11, 19, 31, 23)));
+
+          var stat2 = navigator.os.stat(path);
+          var dates2 = [ stat2.atime.toISOString(), stat2.mtime.toISOString() ];
+
+          navigator.os.lutimes(path, new Date(Date.UTC(2014, 1, 14, 18, 0, 0)),
+            new Date(Date.UTC(2013, 7, 12, 23, 1, 9)));
+
+          var stat3 = navigator.os.stat(path);
+          var dates3 = [ stat3.atime.toISOString(), stat3.mtime.toISOString() ];
+
+          postMessage(JSON.stringify({
+            dates1: dates1,
+            dates2: dates2,
+            dates3: dates3
+          }));
+        }
+        catch (ex) {
+          postMessage("utime err: " + ex);
+        }
+        `;
+
+      var workerBlob = new Blob([workerCode], { type: 'application/javascript' });
+      var w = new Worker(URL.createObjectURL(workerBlob));
+
+      w.onmessage = e => {
+        ok(e.data.indexOf('utime err') === -1, 'ran successfully');
+        if (e.data.indexOf('utime err') !== -1) {
+          dump(e.data + '\n');
+          return res();
+        }
+
+        try {
+          var data = JSON.parse(e.data);
+        }
+        catch(ex) {
+          ok(false, 'is valid JSON (' + e.data + ')');
+          return res();
+        }
+
+        // @todo We ignore ms at the moment in stat() calls. Which could be counted as a bug.
+
+        ok(data.dates1[0] === '1988-08-31T12:14:17.000Z', 'dates1[0] (' + data.dates1[0] + ')');
+        ok(data.dates1[1] === '1990-09-17T14:11:09.000Z', 'dates1[1] (' + data.dates1[1] + ')');
+        ok(data.dates2[0] === '2011-10-13T08:07:06.000Z', 'dates2[0] (' + data.dates2[0] + ')');
+        ok(data.dates2[1] === '2013-08-11T19:31:23.000Z', 'dates2[1] (' + data.dates2[1] + ')');
+        ok(data.dates3[0] === '2014-02-14T18:00:00.000Z', 'dates3[0] (' + data.dates3[0] + ')');
+        ok(data.dates3[1] === '2013-08-12T23:01:09.000Z', 'dates3[1] (' + data.dates3[1] + ')');
+
+        res();
+      };
+    });
+  }
+
+  SimpleTest.waitForExplicitFinish();
+
+  Promise.all([
+    runTest()
+  ]).then(() => {
+    SimpleTest.finish();
+  });
+  </script>
+</body>
+</html>

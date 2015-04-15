@@ -8,7 +8,9 @@
 #include <limits>
 #include <stdio.h>
 #include <sys/stat.h>
+#include <sys/time.h>
 #include <sys/types.h>
+#include <utime.h>
 #include "jsapi.h"
 #include "mozilla/DOMEventTargetHelper.h"
 #include "mozilla/dom/OsManagerBinding.h"
@@ -221,6 +223,50 @@ OsManager::Unlink(const nsAString& aPath, ErrorResult& aRv)
   }
   else if (rv != 0) {
     HandleErrno(rv, aRv);
+  }
+}
+
+void
+OsManager::Utimes(const nsAString& aPath, const Date& aActime, const Date& aModtime, ErrorResult& aRv)
+{
+  int rv;
+  bool ret = mActor->SendUtimes((nsString&)aPath, aActime.TimeStamp(), aModtime.TimeStamp(), &rv);
+  if (!ret) {
+    aRv.Throw(NS_ERROR_FAILURE);
+  }
+  else if (rv != 0) {
+    HandleErrno(rv, aRv);
+  }
+}
+
+void
+OsManager::Lutimes(const nsAString& aPath, const Date& aActime, const Date& aModtime, ErrorResult& aRv)
+{
+  int rv;
+  bool ret = mActor->SendLutimes((nsString&)aPath, aActime.TimeStamp(), aModtime.TimeStamp(), &rv);
+  if (!ret) {
+    aRv.Throw(NS_ERROR_FAILURE);
+  }
+  else if (rv != 0) {
+    HandleErrno(rv, aRv);
+  }
+}
+
+void
+OsManager::Futimes(File& aFile, const Date& aActime, const Date& aModtime, ErrorResult& aRv)
+{
+  struct timeval tv[2];
+  tv[0] = {
+    .tv_sec = ((time_t)floor(aActime.TimeStamp())) / 1000,
+    .tv_usec = (suseconds_t)(((long)floor(aActime.TimeStamp())) % 1000) * 1000
+  };
+  tv[1] = {
+    .tv_sec = ((time_t)floor(aModtime.TimeStamp())) / 1000,
+    .tv_usec = (suseconds_t)(((long)floor(aModtime.TimeStamp())) % 1000) * 1000
+  };
+  int fr = futimes(aFile.GetFd(), tv);
+  if (fr == -1) {
+    HandleErrno(errno, aRv);
   }
 }
 
