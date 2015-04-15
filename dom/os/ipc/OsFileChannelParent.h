@@ -31,6 +31,8 @@ private:
   virtual bool RecvOpen(const nsString& aPath, const int& aAccess, const int& aPermission, FileDescriptorResponse* aFd) override;
   virtual bool RecvLstat(const nsString& aPath, StatWrapper* aRetval) override;
   virtual bool RecvStat(const nsString& aPath, StatWrapper* aRetval) override;
+  virtual bool RecvUnlink(const nsString& aPath, int* aRetval) override;
+  virtual bool RecvChmod(const nsString& aPath, const int& aPermission, int* aRetval) override;
 
   virtual void ActorDestroy(ActorDestroyReason aWhy) override;
 };

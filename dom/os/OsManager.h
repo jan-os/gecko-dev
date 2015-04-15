@@ -54,6 +54,14 @@ public:
   already_AddRefed<os::Stat> Lstat(const nsAString& aPath, ErrorResult& aRv);
   already_AddRefed<os::Stat> Fstat(const File& aFile, ErrorResult& aRv);
 
+  // chmod operations
+  void Chmod(const nsAString& aPath, int aMode, ErrorResult& aRv);
+  void Fchmod(const File& aFile, int aMode, ErrorResult& aRv);
+
+  // unlink operations
+  void Unlink(const nsAString& aPath, ErrorResult& aRv);
+
+  // Open flags
   int RDONLY() const { return O_RDONLY; }
   int WRONLY() const { return O_WRONLY; }
   int RDWR() const { return O_RDWR; }
@@ -66,8 +74,25 @@ public:
   int SYNC() const { return O_SYNC; }
   int TRUNC() const { return O_TRUNC; }
 
+  // Permission flags
   int IWRITE() const { return S_IWRITE; }
   int IREAD() const { return S_IREAD; }
+
+  int ISUID() const { return S_ISUID; }
+  int ISGID() const { return S_ISGID; }
+  int ISVTX() const { return S_ISVTX; }
+  int IRUSR() const { return S_IRUSR; }
+  int IWUSR() const { return S_IWUSR; }
+  int IXUSR() const { return S_IXUSR; }
+  int IRGRP() const { return S_IRGRP; }
+  int IWGRP() const { return S_IWGRP; }
+  int IXGRP() const { return S_IXGRP; }
+  int IROTH() const { return S_IROTH; }
+  int IWOTH() const { return S_IWOTH; }
+  int IXOTH() const { return S_IXOTH; }
+  int IRWXU() const { return S_IRWXU; }
+  int IRWXG() const { return S_IRWXG; }
+  int IRWXO() const { return S_IRWXO; }
 
   void GetTEMP_DIR(nsString& aRetVal) {
     nsCOMPtr<nsIFile> tmpDir;

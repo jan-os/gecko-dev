@@ -1,13 +1,13 @@
 [Exposed=(Worker,System)]
 interface OsManager {
   [Throws]
-  OsManagerFd open(DOMString path, long access, long permission);
+  OsManagerFd open(DOMString path, long access, optional long permission = 0);
   [Throws]
   Uint8Array read(OsManagerFd fd, long bytes);
   [Throws]
   long write(OsManagerFd fd, Uint8Array buffer);
   [Throws]
-  long close(OsManagerFd fd);
+  long close(OsManagerFd fd); // @todo: should be void
 
   [Throws]
   OsManagerStat lstat(DOMString path);
@@ -16,8 +16,15 @@ interface OsManager {
   [Throws]
   OsManagerStat fstat(OsManagerFd fd);
 
+  [Throws]
+  void chmod(DOMString path, long mode);
+  [Throws]
+  void fchmod(OsManagerFd fd, long mode);
+
+  [Throws]
+  void unlink(DOMString path);
+
   /* Missing according to emscripten:
-   * chmod
    * utimes
    * truncate
    * mkdir (open?)
@@ -43,6 +50,22 @@ interface OsManager {
 
   readonly attribute long IWRITE;
   readonly attribute long IREAD;
+
+  readonly attribute long ISUID;
+  readonly attribute long ISGID;
+  readonly attribute long ISVTX;
+  readonly attribute long IRUSR;
+  readonly attribute long IWUSR;
+  readonly attribute long IXUSR;
+  readonly attribute long IRGRP;
+  readonly attribute long IWGRP;
+  readonly attribute long IXGRP;
+  readonly attribute long IROTH;
+  readonly attribute long IWOTH;
+  readonly attribute long IXOTH;
+  readonly attribute long IRWXU;
+  readonly attribute long IRWXG;
+  readonly attribute long IRWXO;
 
   // Should have some attribute in manifest that specifies access to this
   // dir... As it's platform specific.

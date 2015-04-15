@@ -1,0 +1,113 @@
+<!DOCTYPE HTML>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>os chmod test</title>
+  <script type="text/javascript" src="/tests/SimpleTest/SimpleTest.js"></script>
+  <link rel="stylesheet" type="text/css" href="/tests/SimpleTest/test.css" />
+</head>
+<body>
+  <a target="_blank" href="https://bugzilla.mozilla.org/show_bug.cgi?id=1141021">os tests</a>
+  <p id="display"></p>
+  <div id="content" style="display: none"></div>
+  <pre id="test"></pre>
+
+  <script>
+  var jsFuns = SpecialPowers.Cu.getJSTestingFunctions();
+
+  function runTest() {
+    return new Promise((res, rej) => {
+      var workerCode = `
+        try {
+          function getMode(stat) {
+            var s = '';
+            var mode = stat.mode;
+
+            s += stat.isDirectory() ? "d" : "-";
+            s += ((mode & navigator.os.IRUSR) ? "r" : "-");
+            s += ((mode & navigator.os.IWUSR) ? "w" : "-");
+            s += ((mode & navigator.os.IXUSR) ? "x" : "-");
+            s += ((mode & navigator.os.IRGRP) ? "r" : "-");
+            s += ((mode & navigator.os.IWGRP) ? "w" : "-");
+            s += ((mode & navigator.os.IXGRP) ? "x" : "-");
+            s += ((mode & navigator.os.IROTH) ? "r" : "-");
+            s += ((mode & navigator.os.IWOTH) ? "w" : "-");
+            s += ((mode & navigator.os.IXOTH) ? "x" : "-");
+
+            return s;
+          }
+
+          var path = navigator.os.TEMP_DIR + '/test_chmod';
+          try {
+            navigator.os.unlink(path);
+          }
+          catch (ex) {}
+
+          var file1 = navigator.os.open(path, navigator.os.RDWR | navigator.os.CREAT,
+            navigator.os.IRWXU);
+          navigator.os.write(file1,
+            new Uint8Array("Test".split('').map(c => c.charCodeAt(0))));
+          navigator.os.close(file1);
+
+          var mode1 = getMode(navigator.os.stat(path));
+
+          navigator.os.chmod(path,
+            navigator.os.IRWXU | navigator.os.IWGRP);
+
+          var mode2 = getMode(navigator.os.stat(path));
+
+          var file2 = navigator.os.open(path, navigator.os.RDONLY);
+          navigator.os.fchmod(file2,
+            navigator.os.IXUSR | navigator.os.IXGRP | navigator.os.IXOTH);
+          navigator.os.close(file2);
+
+          var mode3 = getMode(navigator.os.stat(path));
+
+          postMessage(JSON.stringify({
+            mode1: mode1,
+            mode2: mode2,
+            mode3: mode3
+          }));
+        }
+        catch (ex) {
+          postMessage("chmod err: " + ex);
+        }
+        `;
+
+      var workerBlob = new Blob([workerCode], { type: 'application/javascript' });
+      var w = new Worker(URL.createObjectURL(workerBlob));
+
+      w.onmessage = e => {
+        ok(e.data.indexOf('chmod err') === -1, 'ran successfully');
+        if (e.data.indexOf('chmod err') !== -1) {
+          dump(e.data + '\n');
+          return res();
+        }
+
+        try {
+          var data = JSON.parse(e.data);
+        }
+        catch(ex) {
+          ok(false, 'is valid JSON (' + e.data + ')');
+          return res();
+        }
+
+        ok(data.mode1 === '-rwx------', 'mode1 (' + data.mode1 + ')');
+        ok(data.mode2 === '-rwx-w----', 'mode2 (' + data.mode2 + ')');
+        ok(data.mode3 === '---x--x--x', 'mode3 (' + data.mode3 + ')');
+
+        res();
+      };
+    });
+  }
+
+  SimpleTest.waitForExplicitFinish();
+
+  Promise.all([
+    runTest()
+  ]).then(() => {
+    SimpleTest.finish();
+  });
+  </script>
+</body>
+</html>

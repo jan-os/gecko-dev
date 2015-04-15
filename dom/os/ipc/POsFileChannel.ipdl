@@ -26,6 +26,8 @@ parent:
   sync Open(nsString path, int access, int permission) returns (FileDescriptorResponse fd);
   sync Lstat(nsString path) returns (StatWrapper sb);
   sync Stat(nsString path) returns (StatWrapper sb);
+  sync Unlink(nsString path) returns (int rv);
+  sync Chmod(nsString path, int permission) returns (int rv);
 
 child:
   __delete__();

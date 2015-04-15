@@ -86,7 +86,13 @@ OsFileChannelParent::RecvOpen(const nsString& aPath, const int& aAccess, const i
     return true;
   }
 
-  int fd = open(path, aAccess, aPermission);
+  int fd;
+  if (aPermission == 0) { // @todo make method overload?
+    fd = open(path, aAccess);
+  }
+  else {
+    fd = open(path, aAccess, aPermission);
+  }
   *aFd = *(new FileDescriptorResponse(FileDescriptor(fd), fd == -1 ? errno : 0));
 
   return true;
@@ -153,6 +159,47 @@ OsFileChannelParent::RecvLstat(const nsString& aPath, StatWrapper* aRetval)
 
   return true;
 }
+
+bool
+OsFileChannelParent::RecvUnlink(const nsString& aPath, int* aRetval) {
+  AssertIsOnBackgroundThread();
+
+  auto path = NS_LossyConvertUTF16toASCII(aPath).get();
+  if (!VerifyRights(path)) {
+    *aRetval = EACCES;
+    return true;
+  }
+
+  if (unlink(path) == -1) {
+    *aRetval = errno;
+  }
+  else {
+    *aRetval = 0;
+  }
+
+  return true;
+}
+
+bool
+OsFileChannelParent::RecvChmod(const nsString& aPath, const int& aPermission, int* aRetval) {
+  AssertIsOnBackgroundThread();
+
+  auto path = NS_LossyConvertUTF16toASCII(aPath).get();
+  if (!VerifyRights(path)) {
+    *aRetval = EACCES;
+    return true;
+  }
+
+  if (chmod(path, aPermission) == -1) {
+    *aRetval = errno;
+  }
+  else {
+    *aRetval = 0;
+  }
+
+  return true;
+}
+
 
 void
 OsFileChannelParent::ActorDestroy(ActorDestroyReason aWhy)

@@ -189,6 +189,41 @@ OsManager::Fstat(const File& aFile, ErrorResult& aRv)
   return stat.forget();
 }
 
+void
+OsManager::Chmod(const nsAString& aPath, int aMode, ErrorResult& aRv)
+{
+  int rv;
+  bool ret = mActor->SendChmod((nsString&)aPath, aMode, &rv);
+  if (!ret) {
+    aRv.Throw(NS_ERROR_FAILURE);
+  }
+  else if (rv != 0) {
+    HandleErrno(rv, aRv);
+  }
+}
+
+void
+OsManager::Fchmod(const File& aFile, int aMode, ErrorResult& aRv)
+{
+  int cr = fchmod(aFile.GetFd(), aMode);
+  if (cr == -1) {
+    HandleErrno(errno, aRv);
+  }
+}
+
+void
+OsManager::Unlink(const nsAString& aPath, ErrorResult& aRv)
+{
+  int rv;
+  bool ret = mActor->SendUnlink((nsString&)aPath, &rv);
+  if (!ret) {
+    aRv.Throw(NS_ERROR_FAILURE);
+  }
+  else if (rv != 0) {
+    HandleErrno(rv, aRv);
+  }
+}
+
 } // namespace os
 } // namespace dom
 } // namespace mozilla
