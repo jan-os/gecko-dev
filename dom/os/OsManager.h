@@ -46,19 +46,31 @@ public:
    */
 
   // file operations
-  already_AddRefed<File> Open(const nsAString& aPath, int aAccess, int aPermission, ErrorResult& aRv);
-  void Read(JSContext* aCx, File& aFile, int aBytes, JS::MutableHandle<JSObject*> aRet, ErrorResult& aRv);
+  already_AddRefed<File> Open(const nsAString& aPath,
+                              int aAccess,
+                              int aPermission,
+                              ErrorResult& aRv);
+
+  void Read(JSContext* aCx,
+            File& aFile,
+            int aBytes,
+            JS::MutableHandle<JSObject*> aRet,
+            ErrorResult& aRv);
+
   int Write(File& aFile, const Uint8Array& buffer, ErrorResult& aRv);
-  int Close(File& aFile, ErrorResult& aRv);
+  void Close(File& aFile, ErrorResult& aRv);
 
   void Chmod(const nsAString& aPath, int aMode, ErrorResult& aRv);
   void Fchmod(const File& aFile, int aMode, ErrorResult& aRv);
 
   void Unlink(const nsAString& aPath, ErrorResult& aRv);
 
-  void Utimes(const nsAString& aPath, const Date& aActime, const Date& aModtime, ErrorResult& aRv);
-  void Lutimes(const nsAString& aPath, const Date& aActime, const Date& aModtime, ErrorResult& aRv);
-  void Futimes(File& aFile, const Date& aActime, const Date& aModtime, ErrorResult& aRv);
+  void Utimes(const nsAString& aPath, const Date& aActime,
+              const Date& aModtime, ErrorResult& aRv);
+  void Lutimes(const nsAString& aPath, const Date& aActime,
+               const Date& aModtime, ErrorResult& aRv);
+  void Futimes(File& aFile, const Date& aActime,
+               const Date& aModtime, ErrorResult& aRv);
 
   // stat operations
   already_AddRefed<os::Stat> Stat(const nsAString& aPath, ErrorResult& aRv);

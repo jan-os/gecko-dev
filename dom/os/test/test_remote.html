@@ -38,7 +38,6 @@
         dump('expected "' + expectedData + '", but was "' + data.data + '"\n');
       }
       ok(data.data === expectedData, 'data');
-      ok(data.closeRet === 0, 'closeRet (exp. 0, was ' + data.closeRet + ')');
 
       SimpleTest.finish();
     }, false);

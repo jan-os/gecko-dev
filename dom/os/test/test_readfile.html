@@ -22,12 +22,11 @@
           var file = navigator.os.open("../../../../dom/os/test/payload.txt",
             navigator.os.RDONLY, navigator.os.IREAD);
           var data = navigator.os.read(file, ` + bytes + `);
-          var cr = navigator.os.close(file);
+          navigator.os.close(file);
 
           postMessage(JSON.stringify({
             hasFile: !!file,
-            data: data.join(','),
-            closeRet: cr
+            data: data.join(',')
           }));
         }
         catch (ex) {
@@ -59,7 +58,6 @@
           dump('expected "' + expectedData + '", but was "' + data.data + '"\n');
         }
         ok(data.data === expectedData, 'data');
-        ok(data.closeRet === 0, 'closeRet (exp. 0, was ' + data.closeRet + ')');
 
         res();
       };

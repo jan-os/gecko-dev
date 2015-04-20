@@ -24,11 +24,11 @@
             navigator.os.RDWR | navigator.os.CREAT, 0666);
           var arr = new Uint8Array("` + expected + `".split('').map(c => c.charCodeAt(0)));
           var written = navigator.os.write(file, arr);
-          var close1 = navigator.os.close(file);
+          navigator.os.close(file);
 
           file = navigator.os.open(path, navigator.os.RDONLY, navigator.os.IREAD);
           var data = navigator.os.read(file, 200);
-          var close2 = navigator.os.close(file);
+          navigator.os.close(file);
 
           var open2err = null;
           try {
@@ -41,8 +41,6 @@
           postMessage(JSON.stringify({
             data: data.join(','),
             written: written,
-            close1: close1,
-            close2: close2,
             open2: open2,
             open2err: open2err
           }));
@@ -75,8 +73,6 @@
           dump('expected "' + expectedData + '", but was "' + data.data + '"\n');
         }
         ok(data.data === expectedData, 'data');
-        ok(data.close1 === 0, 'close1');
-        ok(data.close2 === 0, 'close2');
         ok(!data.open2, 'open2');
         ok(data.open2err === 'No such file or directory', 'open2err');
         if (data.open2err !== 'No such file or directory') {

@@ -34,6 +34,9 @@ OsFileChannelParent::VerifyRights(const char* aPath)
   // first make a normal char* out of aPath
   int aPathLen = strlen(aPath);
   char* org_path = (char*)malloc(aPathLen + 1);
+  if (!org_path) {
+    return false; // @todo: NS_ERROR_OUT_OF_MEMORY
+  }
   for (int ix = 0; ix < aPathLen; ix++) {
     org_path[ix] = aPath[ix];
   }
@@ -49,13 +52,18 @@ OsFileChannelParent::VerifyRights(const char* aPath)
     // when ENOENT we check parent directory (and up and up, etc.)
     // when something else, break and return false
     if (errno != ENOENT) {
-      printf("VerifyRights for '%s' failed with %d (%s)\n", org_path, errno, strerror(errno));
+      printf("VerifyRights for '%s' failed with %d (%s)\n",
+             org_path, errno, strerror(errno));
       free(org_path);
       return false;
     }
 
     // dirname changes the pointer you feed into it so we need to copy it first
     char* old_path = (char*)malloc(strlen(path) + 1);
+    if (!old_path) {
+      free(org_path);
+      return false; //@todo: NS_ERROR_OUT_OF_MEMORY
+    }
     strcpy(old_path, path);
 
     path = dirname(path);
@@ -77,7 +85,10 @@ OsFileChannelParent::VerifyRights(const char* aPath)
 }
 
 bool
-OsFileChannelParent::RecvOpen(const nsString& aPath, const int& aAccess, const int& aPermission, FileDescriptorResponse* aFd)
+OsFileChannelParent::RecvOpen(const nsString& aPath,
+                              const int& aAccess,
+                              const int& aPermission,
+                              FileDescriptorResponse* aFd)
 {
   AssertIsOnBackgroundThread();
 
@@ -162,7 +173,8 @@ OsFileChannelParent::RecvLstat(const nsString& aPath, StatWrapper* aRetval)
 }
 
 bool
-OsFileChannelParent::RecvUnlink(const nsString& aPath, int* aRetval) {
+OsFileChannelParent::RecvUnlink(const nsString& aPath, int* aRetval)
+{
   AssertIsOnBackgroundThread();
 
   auto path = NS_LossyConvertUTF16toASCII(aPath).get();
@@ -182,7 +194,10 @@ OsFileChannelParent::RecvUnlink(const nsString& aPath, int* aRetval) {
 }
 
 bool
-OsFileChannelParent::RecvChmod(const nsString& aPath, const int& aPermission, int* aRetval) {
+OsFileChannelParent::RecvChmod(const nsString& aPath,
+                               const int& aPermission,
+                               int* aRetval)
+{
   AssertIsOnBackgroundThread();
 
   auto path = NS_LossyConvertUTF16toASCII(aPath).get();
@@ -202,7 +217,11 @@ OsFileChannelParent::RecvChmod(const nsString& aPath, const int& aPermission, in
 }
 
 bool
-OsFileChannelParent::RecvUtimes(const nsString& aPath, const double& aActime, const double& aModtime, int* aRetval) {
+OsFileChannelParent::RecvUtimes(const nsString& aPath,
+                                const double& aActime,
+                                const double& aModtime,
+                                int* aRetval)
+{
   AssertIsOnBackgroundThread();
 
   auto path = NS_LossyConvertUTF16toASCII(aPath).get();
@@ -232,7 +251,11 @@ OsFileChannelParent::RecvUtimes(const nsString& aPath, const double& aActime, co
 }
 
 bool
-OsFileChannelParent::RecvLutimes(const nsString& aPath, const double& aActime, const double& aModtime, int* aRetval) {
+OsFileChannelParent::RecvLutimes(const nsString& aPath,
+                                 const double& aActime,
+                                 const double& aModtime,
+                                 int* aRetval)
+{
   AssertIsOnBackgroundThread();
 
   auto path = NS_LossyConvertUTF16toASCII(aPath).get();

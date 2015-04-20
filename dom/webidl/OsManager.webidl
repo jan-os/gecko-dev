@@ -7,7 +7,7 @@ interface OsManager {
   [Throws]
   long write(OsManagerFd fd, Uint8Array buffer);
   [Throws]
-  long close(OsManagerFd fd); // @todo: should be void
+  void close(OsManagerFd fd);
 
   [Throws]
   OsManagerStat lstat(DOMString path);

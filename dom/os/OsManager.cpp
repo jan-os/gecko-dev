@@ -38,7 +38,8 @@ OsManager::OsManager(workers::WorkerGlobalScope* aScope)
   : DOMEventTargetHelper(static_cast<DOMEventTargetHelper*>(aScope)),
     mScope(aScope)
 {
-  ipc::PBackgroundChild* backgroundChild = ipc::BackgroundChild::GetForCurrentThread();
+  ipc::PBackgroundChild* backgroundChild =
+    ipc::BackgroundChild::GetForCurrentThread();
   mActor = backgroundChild->SendPOsFileChannelConstructor();
 
   MOZ_ASSERT(mActor);
@@ -67,10 +68,10 @@ OsManager::HandleErrno(int aErr, ErrorResult& aRv)
 }
 
 already_AddRefed<File>
-OsManager::Open(const nsAString& aPath, int aAccess, int aPermission, ErrorResult& aRv)
+OsManager::Open(const nsAString& aPath, int aAccess, int aPermission,
+                ErrorResult& aRv)
 {
   aRv.MightThrowJSException();
-  // Where are we gonna do the security checks, here or in OsFileChannelParent?
 
   FileDescriptorResponse fdr = {};
   bool ret = mActor->SendOpen((nsString&)aPath, aAccess, aPermission, &fdr);
@@ -89,9 +90,15 @@ OsManager::Open(const nsAString& aPath, int aAccess, int aPermission, ErrorResul
 }
 
 void
-OsManager::Read(JSContext* aCx, File& aFile, int aBytes, JS::MutableHandle<JSObject*> aRet, ErrorResult& aRv)
+OsManager::Read(JSContext* aCx, File& aFile, int aBytes,
+                JS::MutableHandle<JSObject*> aRet, ErrorResult& aRv)
 {
   unsigned char* buffer = (unsigned char*)malloc(aBytes + 1);
+  if (!buffer) {
+    aRv.Throw(NS_ERROR_OUT_OF_MEMORY);
+    return;
+  }
+
   size_t bytes_read = read(aFile.GetFd(), buffer, aBytes);
   if (bytes_read == (size_t)-1) {
     HandleErrno(errno, aRv);
@@ -123,14 +130,13 @@ OsManager::Write(File& aFile, const Uint8Array& aBuffer, ErrorResult &aRv)
   return ret;
 }
 
-int
+void
 OsManager::Close(File& aFile, ErrorResult& aRv)
 {
-  if (close(aFile.GetFd()) == -1) {
+  int cr = close(aFile.GetFd());
+  if (cr == -1) {
     HandleErrno(errno, aRv);
-    return -1;
   }
-  return 0;
 }
 
 already_AddRefed<os::Stat>
@@ -227,10 +233,12 @@ OsManager::Unlink(const nsAString& aPath, ErrorResult& aRv)
 }
 
 void
-OsManager::Utimes(const nsAString& aPath, const Date& aActime, const Date& aModtime, ErrorResult& aRv)
+OsManager::Utimes(const nsAString& aPath, const Date& aActime,
+                  const Date& aModtime, ErrorResult& aRv)
 {
   int rv;
-  bool ret = mActor->SendUtimes((nsString&)aPath, aActime.TimeStamp(), aModtime.TimeStamp(), &rv);
+  bool ret = mActor->SendUtimes((nsString&)aPath, aActime.TimeStamp(),
+                                aModtime.TimeStamp(), &rv);
   if (!ret) {
     aRv.Throw(NS_ERROR_FAILURE);
   }
@@ -240,10 +248,12 @@ OsManager::Utimes(const nsAString& aPath, const Date& aActime, const Date& aModt
 }
 
 void
-OsManager::Lutimes(const nsAString& aPath, const Date& aActime, const Date& aModtime, ErrorResult& aRv)
+OsManager::Lutimes(const nsAString& aPath, const Date& aActime,
+                   const Date& aModtime, ErrorResult& aRv)
 {
   int rv;
-  bool ret = mActor->SendLutimes((nsString&)aPath, aActime.TimeStamp(), aModtime.TimeStamp(), &rv);
+  bool ret = mActor->SendLutimes((nsString&)aPath, aActime.TimeStamp(),
+                                 aModtime.TimeStamp(), &rv);
   if (!ret) {
     aRv.Throw(NS_ERROR_FAILURE);
   }
@@ -253,7 +263,8 @@ OsManager::Lutimes(const nsAString& aPath, const Date& aActime, const Date& aMod
 }
 
 void
-OsManager::Futimes(File& aFile, const Date& aActime, const Date& aModtime, ErrorResult& aRv)
+OsManager::Futimes(File& aFile, const Date& aActime,
+                   const Date& aModtime, ErrorResult& aRv)
 {
   struct timeval tv[2];
   tv[0] = {
