@@ -45,39 +45,68 @@ interface OsManager {
    * lseek
    */
 
+  [Constant]
   readonly attribute long RDONLY;
+  [Constant]
   readonly attribute long WRONLY;
+  [Constant]
   readonly attribute long RDWR;
+  [Constant]
   readonly attribute long APPEND;
+  [Constant]
   readonly attribute long CREAT;
+  [Constant]
   readonly attribute long DSYNC;
+  [Constant]
   readonly attribute long EXCL;
+  [Constant]
   readonly attribute long NOCTTY;
+  [Constant]
   readonly attribute long NONBLOCK;
+  [Constant]
   readonly attribute long SYNC;
+  [Constant]
   readonly attribute long TRUNC;
 
+  [Constant]
   readonly attribute long IWRITE;
+  [Constant]
   readonly attribute long IREAD;
 
+  [Constant]
   readonly attribute long ISUID;
+  [Constant]
   readonly attribute long ISGID;
+  [Constant]
   readonly attribute long ISVTX;
+  [Constant]
   readonly attribute long IRUSR;
+  [Constant]
   readonly attribute long IWUSR;
+  [Constant]
   readonly attribute long IXUSR;
+  [Constant]
   readonly attribute long IRGRP;
+  [Constant]
   readonly attribute long IWGRP;
+  [Constant]
   readonly attribute long IXGRP;
+  [Constant]
   readonly attribute long IROTH;
+  [Constant]
   readonly attribute long IWOTH;
+  [Constant]
   readonly attribute long IXOTH;
+  [Constant]
   readonly attribute long IRWXU;
+  [Constant]
   readonly attribute long IRWXG;
+  [Constant]
   readonly attribute long IRWXO;
 
   // Should have some attribute in manifest that specifies access to this
   // dir... As it's platform specific.
+  [Constant]
   readonly attribute DOMString TEMP_DIR;
 };
 
