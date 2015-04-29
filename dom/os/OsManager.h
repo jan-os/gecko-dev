@@ -72,6 +72,12 @@ public:
   void Futimes(File& aFile, const Date& aActime,
                const Date& aModtime, ErrorResult& aRv);
 
+  void Truncate(const nsAString& aPath, int aLength, ErrorResult& aRv);
+  void Ftruncate(const File& aFile, int aLength, ErrorResult& aRv);
+
+  void Mkdir(const nsAString& aPath, int aMode, ErrorResult& aRv);
+  void Rmdir(const nsAString& aPath, ErrorResult& aRv);
+
   // stat operations
   already_AddRefed<os::Stat> Stat(const nsAString& aPath, ErrorResult& aRv);
   already_AddRefed<os::Stat> Lstat(const nsAString& aPath, ErrorResult& aRv);

@@ -281,6 +281,54 @@ OsManager::Futimes(File& aFile, const Date& aActime,
   }
 }
 
+void
+OsManager::Truncate(const nsAString& aPath, int aLength, ErrorResult& aRv)
+{
+  int rv;
+  bool ret = mActor->SendTruncate((nsString&)aPath, aLength, &rv);
+  if (!ret) {
+    aRv.Throw(NS_ERROR_FAILURE);
+  }
+  else if (rv != 0) {
+    HandleErrno(rv, aRv);
+  }
+}
+
+void
+OsManager::Ftruncate(const File& aFile, int aLength, ErrorResult& aRv)
+{
+  int cr = ftruncate(aFile.GetFd(), aLength);
+  if (cr == -1) {
+    HandleErrno(errno, aRv);
+  }
+}
+
+void
+OsManager::Mkdir(const nsAString& aPath, int aMode, ErrorResult& aRv)
+{
+  int rv;
+  bool ret = mActor->SendMkdir((nsString&)aPath, aMode, &rv);
+  if (!ret) {
+    aRv.Throw(NS_ERROR_FAILURE);
+  }
+  else if (rv != 0) {
+    HandleErrno(rv, aRv);
+  }
+}
+
+void
+OsManager::Rmdir(const nsAString& aPath, ErrorResult& aRv)
+{
+  int rv;
+  bool ret = mActor->SendRmdir((nsString&)aPath, &rv);
+  if (!ret) {
+    aRv.Throw(NS_ERROR_FAILURE);
+  }
+  else if (rv != 0) {
+    HandleErrno(rv, aRv);
+  }
+}
+
 } // namespace os
 } // namespace dom
 } // namespace mozilla

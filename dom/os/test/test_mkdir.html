@@ -1,0 +1,111 @@
+<!DOCTYPE HTML>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>os dir test</title>
+  <script type="text/javascript" src="/tests/SimpleTest/SimpleTest.js"></script>
+  <link rel="stylesheet" type="text/css" href="/tests/SimpleTest/test.css" />
+</head>
+<body>
+  <a target="_blank" href="https://bugzilla.mozilla.org/show_bug.cgi?id=1141021">os tests</a>
+  <p id="display"></p>
+  <div id="content" style="display: none"></div>
+  <pre id="test"></pre>
+
+  <script>
+  var jsFuns = SpecialPowers.Cu.getJSTestingFunctions();
+
+  function runTest() {
+    return new Promise((res, rej) => {
+      var workerCode = `
+        try {
+          function getMode(stat) {
+            var s = '';
+            var mode = stat.mode;
+
+            s += stat.isDirectory() ? "d" : "-";
+            s += ((mode & navigator.os.IRUSR) ? "r" : "-");
+            s += ((mode & navigator.os.IWUSR) ? "w" : "-");
+            s += ((mode & navigator.os.IXUSR) ? "x" : "-");
+            s += ((mode & navigator.os.IRGRP) ? "r" : "-");
+            s += ((mode & navigator.os.IWGRP) ? "w" : "-");
+            s += ((mode & navigator.os.IXGRP) ? "x" : "-");
+            s += ((mode & navigator.os.IROTH) ? "r" : "-");
+            s += ((mode & navigator.os.IWOTH) ? "w" : "-");
+            s += ((mode & navigator.os.IXOTH) ? "x" : "-");
+
+            return s;
+          }
+
+          var path = navigator.os.TEMP_DIR + '/test_mkdir';
+          try {
+            navigator.os.rmdir(path);
+          }
+          catch (ex) {}
+
+          navigator.os.mkdir(path, navigator.os.IRWXU);
+          var stat1 = navigator.os.stat(path);
+          navigator.os.rmdir(path);
+
+          var stat2, staterr2;
+          try {
+            stat2 = navigator.os.stat(path);
+          }
+          catch(ex) {
+            staterr2 = ex;
+          }
+
+          postMessage(JSON.stringify({
+            stat1: {
+              dir: stat1.isDirectory(),
+              file: stat1.isFile(),
+              mode: getMode(stat1)
+            },
+            stat2: stat2,
+            staterr2: staterr2
+          }));
+        }
+        catch (ex) {
+          postMessage("dir err: " + ex);
+        }
+        `;
+
+      var workerBlob = new Blob([workerCode], { type: 'application/javascript' });
+      var w = new Worker(URL.createObjectURL(workerBlob));
+
+      w.onmessage = e => {
+        is(e.data.indexOf('dir err'), -1, 'ran successfully');
+        if (e.data.indexOf('dir err') !== -1) {
+          dump(e.data + '\n');
+          return res();
+        }
+
+        try {
+          var data = JSON.parse(e.data);
+        }
+        catch(ex) {
+          ok(false, 'is valid JSON (' + e.data + ')');
+          return res();
+        }
+
+        is(data.stat1.dir, true, 'stat1.dir');
+        is(data.stat1.file, false, 'stat1.file');
+        is(data.stat1.mode, 'drwx------', 'stat1.mode');
+        is(data.stat2, undefined, 'stat2');
+        is(data.staterr2, 'No such file or directory', 'staterr2');
+
+        res();
+      };
+    });
+  }
+
+  SimpleTest.waitForExplicitFinish();
+
+  Promise.all([
+    runTest()
+  ]).then(() => {
+    SimpleTest.finish();
+  });
+  </script>
+</body>
+</html>

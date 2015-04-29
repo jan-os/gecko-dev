@@ -51,6 +51,16 @@ private:
                            const double& aModtime,
                            int* aRetval) override;
 
+  virtual bool RecvTruncate(const nsString& aPath,
+                            const int& aLength,
+                            int* aRetval) override;
+
+  virtual bool RecvMkdir(const nsString& aPath,
+                         const int& aMode,
+                         int* aRetval) override;
+
+  virtual bool RecvRmdir(const nsString& aPath, int* aRetval) override;
+
   virtual void ActorDestroy(ActorDestroyReason aWhy) override;
 };
 

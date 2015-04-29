@@ -30,6 +30,9 @@ parent:
   sync Chmod(nsString path, int permission) returns (int rv);
   sync Utimes(nsString path, double actime, double modtime) returns (int rv);
   sync Lutimes(nsString path, double actime, double modtime) returns (int rv);
+  sync Truncate(nsString path, int length) returns (int rv);
+  sync Mkdir(nsString path, int mode) returns (int rv);
+  sync Rmdir(nsString path) returns (int rv);
 
 child:
   __delete__();

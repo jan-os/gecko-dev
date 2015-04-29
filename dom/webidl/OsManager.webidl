@@ -31,12 +31,19 @@ interface OsManager {
   [Throws]
   void futimes(OsManagerFd fd, Date actime, Date modtime);
 
+  [Throws]
+  void truncate(DOMString path, long length);
+  [Throws]
+  void ftruncate(OsManagerFd fd, long length);
+
+  [Throws]
+  void mkdir(DOMString path, long mode);
+  [Throws]
+  void rmdir(DOMString path);
+
   /* Missing according to emscripten:
-   * truncate
-   * mkdir (open?)
    * rename
    * unlink
-   * rmdir
    * readdir
    * symlink
    * readlink

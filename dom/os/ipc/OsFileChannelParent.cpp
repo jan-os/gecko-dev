@@ -284,6 +284,73 @@ OsFileChannelParent::RecvLutimes(const nsString& aPath,
   return true;
 }
 
+bool
+OsFileChannelParent::RecvTruncate(const nsString& aPath,
+                               const int& aLength,
+                               int* aRetval)
+{
+  AssertIsOnBackgroundThread();
+
+  auto path = NS_LossyConvertUTF16toASCII(aPath).get();
+  if (!VerifyRights(path)) {
+    *aRetval = EACCES;
+    return true;
+  }
+
+  if (truncate(path, aLength) == -1) {
+    *aRetval = errno;
+  }
+  else {
+    *aRetval = 0;
+  }
+
+  return true;
+}
+
+bool
+OsFileChannelParent::RecvMkdir(const nsString& aPath,
+                               const int& aMode,
+                               int* aRetval)
+{
+  AssertIsOnBackgroundThread();
+
+  auto path = NS_LossyConvertUTF16toASCII(aPath).get();
+  if (!VerifyRights(path)) {
+    *aRetval = EACCES;
+    return true;
+  }
+
+  if (mkdir(path, aMode) == -1) {
+    *aRetval = errno;
+  }
+  else {
+    *aRetval = 0;
+  }
+
+  return true;
+}
+
+bool
+OsFileChannelParent::RecvRmdir(const nsString& aPath, int* aRetval)
+{
+  AssertIsOnBackgroundThread();
+
+  auto path = NS_LossyConvertUTF16toASCII(aPath).get();
+  if (!VerifyRights(path)) {
+    *aRetval = EACCES;
+    return true;
+  }
+
+  if (rmdir(path) == -1) {
+    *aRetval = errno;
+  }
+  else {
+    *aRetval = 0;
+  }
+
+  return true;
+}
+
 void
 OsFileChannelParent::ActorDestroy(ActorDestroyReason aWhy)
 {
