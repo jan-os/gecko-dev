@@ -111,7 +111,7 @@ OsFileChannelParent::RecvOpen(const nsString& aPath,
 }
 
 bool
-OsFileChannelParent::RecvStat(const nsString& aPath, StatWrapper* aRetval)
+OsFileChannelParent::RecvStat(const nsString& aPath, StatWrapper* aRetVal)
 {
   AssertIsOnBackgroundThread();
 
@@ -119,13 +119,13 @@ OsFileChannelParent::RecvStat(const nsString& aPath, StatWrapper* aRetval)
 
   auto path = ToNewCString(aPath);
   if (!VerifyRights(path)) {
-    *aRetval = *(new StatWrapper(sb, EACCES));
+    *aRetVal = *(new StatWrapper(sb, EACCES));
     return true;
   }
 
   char* real_path = realpath(path, NULL);
   if (real_path == NULL) {
-    *aRetval = *(new StatWrapper(sb, errno));
+    *aRetVal = *(new StatWrapper(sb, errno));
     free(path);
     return true;
   }
@@ -135,7 +135,7 @@ OsFileChannelParent::RecvStat(const nsString& aPath, StatWrapper* aRetval)
     error = errno;
   }
 
-  *aRetval = *(new StatWrapper(sb, error));
+  *aRetVal = *(new StatWrapper(sb, error));
 
   free(path);
   free(real_path);
@@ -144,7 +144,7 @@ OsFileChannelParent::RecvStat(const nsString& aPath, StatWrapper* aRetval)
 }
 
 bool
-OsFileChannelParent::RecvLstat(const nsString& aPath, StatWrapper* aRetval)
+OsFileChannelParent::RecvLstat(const nsString& aPath, StatWrapper* aRetVal)
 {
   AssertIsOnBackgroundThread();
 
@@ -152,13 +152,13 @@ OsFileChannelParent::RecvLstat(const nsString& aPath, StatWrapper* aRetval)
 
   auto path = ToNewCString(aPath);
   if (!VerifyRights(path)) {
-    *aRetval = *(new StatWrapper(sb, EACCES));
+    *aRetVal = *(new StatWrapper(sb, EACCES));
     return true;
   }
 
   char* real_path = realpath(path, NULL);
   if (real_path == NULL) {
-    *aRetval = *(new StatWrapper(sb, errno));
+    *aRetVal = *(new StatWrapper(sb, errno));
     free(path);
     return true;
   }
@@ -168,7 +168,7 @@ OsFileChannelParent::RecvLstat(const nsString& aPath, StatWrapper* aRetval)
     error = errno;
   }
 
-  *aRetval = *(new StatWrapper(sb, error));
+  *aRetVal = *(new StatWrapper(sb, error));
 
   free(real_path);
 
@@ -176,21 +176,21 @@ OsFileChannelParent::RecvLstat(const nsString& aPath, StatWrapper* aRetval)
 }
 
 bool
-OsFileChannelParent::RecvUnlink(const nsString& aPath, int* aRetval)
+OsFileChannelParent::RecvUnlink(const nsString& aPath, int* aRetVal)
 {
   AssertIsOnBackgroundThread();
 
   auto path = ToNewCString(aPath);
   if (!VerifyRights(path)) {
-    *aRetval = EACCES;
+    *aRetVal = EACCES;
     return true;
   }
 
   if (unlink(path) == -1) {
-    *aRetval = errno;
+    *aRetVal = errno;
   }
   else {
-    *aRetval = 0;
+    *aRetVal = 0;
   }
 
   free(path);
@@ -201,21 +201,21 @@ OsFileChannelParent::RecvUnlink(const nsString& aPath, int* aRetval)
 bool
 OsFileChannelParent::RecvChmod(const nsString& aPath,
                                const int& aPermission,
-                               int* aRetval)
+                               int* aRetVal)
 {
   AssertIsOnBackgroundThread();
 
   auto path = ToNewCString(aPath);
   if (!VerifyRights(path)) {
-    *aRetval = EACCES;
+    *aRetVal = EACCES;
     return true;
   }
 
   if (chmod(path, aPermission) == -1) {
-    *aRetval = errno;
+    *aRetVal = errno;
   }
   else {
-    *aRetval = 0;
+    *aRetVal = 0;
   }
 
   free(path);
@@ -227,13 +227,13 @@ bool
 OsFileChannelParent::RecvUtimes(const nsString& aPath,
                                 const double& aActime,
                                 const double& aModtime,
-                                int* aRetval)
+                                int* aRetVal)
 {
   AssertIsOnBackgroundThread();
 
   auto path = ToNewCString(aPath);
   if (!VerifyRights(path)) {
-    *aRetval = EACCES;
+    *aRetVal = EACCES;
     return true;
   }
 
@@ -248,10 +248,10 @@ OsFileChannelParent::RecvUtimes(const nsString& aPath,
   };
 
   if (utimes(path, tv) == -1) {
-    *aRetval = errno;
+    *aRetVal = errno;
   }
   else {
-    *aRetval = 0;
+    *aRetVal = 0;
   }
 
   free(path);
@@ -263,13 +263,13 @@ bool
 OsFileChannelParent::RecvLutimes(const nsString& aPath,
                                  const double& aActime,
                                  const double& aModtime,
-                                 int* aRetval)
+                                 int* aRetVal)
 {
   AssertIsOnBackgroundThread();
 
   auto path = ToNewCString(aPath);
   if (!VerifyRights(path)) {
-    *aRetval = EACCES;
+    *aRetVal = EACCES;
     return true;
   }
 
@@ -284,10 +284,10 @@ OsFileChannelParent::RecvLutimes(const nsString& aPath,
   };
 
   if (lutimes(path, tv) == -1) {
-    *aRetval = errno;
+    *aRetVal = errno;
   }
   else {
-    *aRetval = 0;
+    *aRetVal = 0;
   }
 
   free(path);
@@ -298,21 +298,21 @@ OsFileChannelParent::RecvLutimes(const nsString& aPath,
 bool
 OsFileChannelParent::RecvTruncate(const nsString& aPath,
                                const int& aLength,
-                               int* aRetval)
+                               int* aRetVal)
 {
   AssertIsOnBackgroundThread();
 
   auto path = ToNewCString(aPath);
   if (!VerifyRights(path)) {
-    *aRetval = EACCES;
+    *aRetVal = EACCES;
     return true;
   }
 
   if (truncate(path, aLength) == -1) {
-    *aRetval = errno;
+    *aRetVal = errno;
   }
   else {
-    *aRetval = 0;
+    *aRetVal = 0;
   }
 
   free(path);
@@ -323,21 +323,21 @@ OsFileChannelParent::RecvTruncate(const nsString& aPath,
 bool
 OsFileChannelParent::RecvMkdir(const nsString& aPath,
                                const int& aMode,
-                               int* aRetval)
+                               int* aRetVal)
 {
   AssertIsOnBackgroundThread();
 
   auto path = ToNewCString(aPath);
   if (!VerifyRights(path)) {
-    *aRetval = EACCES;
+    *aRetVal = EACCES;
     return true;
   }
 
   if (mkdir(path, aMode) == -1) {
-    *aRetval = errno;
+    *aRetVal = errno;
   }
   else {
-    *aRetval = 0;
+    *aRetVal = 0;
   }
 
   free(path);
@@ -346,21 +346,21 @@ OsFileChannelParent::RecvMkdir(const nsString& aPath,
 }
 
 bool
-OsFileChannelParent::RecvRmdir(const nsString& aPath, int* aRetval)
+OsFileChannelParent::RecvRmdir(const nsString& aPath, int* aRetVal)
 {
   AssertIsOnBackgroundThread();
 
   auto path = ToNewCString(aPath);
   if (!VerifyRights(path)) {
-    *aRetval = EACCES;
+    *aRetVal = EACCES;
     return true;
   }
 
   if (rmdir(path) == -1) {
-    *aRetval = errno;
+    *aRetVal = errno;
   }
   else {
-    *aRetval = 0;
+    *aRetVal = 0;
   }
 
   free(path);
@@ -370,22 +370,22 @@ OsFileChannelParent::RecvRmdir(const nsString& aPath, int* aRetval)
 
 bool
 OsFileChannelParent::RecvRename(const nsString& aOldPath,
-                                const nsString& aNewPath, int* aRetval)
+                                const nsString& aNewPath, int* aRetVal)
 {
   AssertIsOnBackgroundThread();
 
   auto oldPath = ToNewCString(aOldPath);
   auto newPath = ToNewCString(aNewPath);
   if (!VerifyRights(oldPath) || !VerifyRights(newPath)) {
-    *aRetval = EACCES;
+    *aRetVal = EACCES;
     return true;
   }
 
   if (rename(oldPath, newPath) == -1) {
-    *aRetval = errno;
+    *aRetVal = errno;
   }
   else {
-    *aRetval = 0;
+    *aRetVal = 0;
   }
 
   free(oldPath);
@@ -396,19 +396,19 @@ OsFileChannelParent::RecvRename(const nsString& aOldPath,
 
 bool
 OsFileChannelParent::RecvReaddir(const nsString& aPath,
-                                 ReaddirResponse* aRetval)
+                                 ReaddirResponse* aRetVal)
 {
   nsTArray<nsString> files;
 
   auto path = ToNewCString(aPath);
   if (!VerifyRights(path)) {
-    *aRetval = *(new ReaddirResponse(files, EACCES));
+    *aRetVal = *(new ReaddirResponse(files, EACCES));
     return true;
   }
 
   DIR* d = opendir(path);
   if (!d) {
-    *aRetval = *(new ReaddirResponse(files, errno));
+    *aRetVal = *(new ReaddirResponse(files, errno));
     return true;
   }
 
@@ -423,7 +423,7 @@ OsFileChannelParent::RecvReaddir(const nsString& aPath,
 
   closedir(d);
 
-  *aRetval = *(new ReaddirResponse(files, 0));
+  *aRetVal = *(new ReaddirResponse(files, 0));
 
   free(path);
 
@@ -433,7 +433,7 @@ OsFileChannelParent::RecvReaddir(const nsString& aPath,
 bool
 OsFileChannelParent::RecvSymlink(const nsString& aPath1,
                                  const nsString& aPath2,
-                                 int* aRetval)
+                                 int* aRetVal)
 {
   // http://pubs.opengroup.org/onlinepubs/009695399/functions/symlink.html
   // The string pointed to by path1 shall be treated only as a character
@@ -442,15 +442,15 @@ OsFileChannelParent::RecvSymlink(const nsString& aPath1,
   auto path1 = ToNewCString(aPath1);
   auto path2 = ToNewCString(aPath2);
   if (!VerifyRights(path2)) {
-    *aRetval = EACCES;
+    *aRetVal = EACCES;
     return true;
   }
 
   if (symlink(path1, path2) == -1) {
-    *aRetval = errno;
+    *aRetVal = errno;
   }
   else {
-    *aRetval = 0;
+    *aRetVal = 0;
   }
 
   free(path1);
@@ -461,11 +461,11 @@ OsFileChannelParent::RecvSymlink(const nsString& aPath1,
 
 bool
 OsFileChannelParent::RecvReadlink(const nsString& aPath,
-                                 ReadlinkResponse* aRetval)
+                                 ReadlinkResponse* aRetVal)
 {
   auto path = ToNewCString(aPath);
   if (!VerifyRights(path)) {
-    *aRetval = *(new ReadlinkResponse(NS_LITERAL_STRING(""), EACCES));
+    *aRetVal = *(new ReadlinkResponse(NS_LITERAL_STRING(""), EACCES));
     return true;
   }
 
@@ -475,14 +475,14 @@ OsFileChannelParent::RecvReadlink(const nsString& aPath,
   while (1) {
     buffer = (char*)realloc(buffer, buffer_size);
     if (!buffer) {
-      *aRetval = *(new ReadlinkResponse(NS_LITERAL_STRING(""), ENOMEM));
+      *aRetVal = *(new ReadlinkResponse(NS_LITERAL_STRING(""), ENOMEM));
       free(path);
       return true;
     }
 
     int rl = readlink(path, buffer, buffer_size);
     if (rl == -1) {
-      *aRetval = *(new ReadlinkResponse(NS_LITERAL_STRING(""), errno));
+      *aRetVal = *(new ReadlinkResponse(NS_LITERAL_STRING(""), errno));
       free(path);
       free(buffer);
       return true;
@@ -490,7 +490,7 @@ OsFileChannelParent::RecvReadlink(const nsString& aPath,
 
     if (rl < buffer_size) {
       buffer[rl] = '\0';
-      *aRetval = *(new ReadlinkResponse(NS_ConvertASCIItoUTF16(buffer), 0));
+      *aRetVal = *(new ReadlinkResponse(NS_ConvertASCIItoUTF16(buffer), 0));
       free(path);
       free(buffer);
       return true;

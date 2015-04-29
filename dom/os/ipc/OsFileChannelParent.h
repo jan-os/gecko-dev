@@ -33,47 +33,47 @@ private:
                         const int& aPermission,
                         FileDescriptorResponse* aFd) override;
 
-  virtual bool RecvLstat(const nsString& aPath, StatWrapper* aRetval) override;
-  virtual bool RecvStat(const nsString& aPath, StatWrapper* aRetval) override;
-  virtual bool RecvUnlink(const nsString& aPath, int* aRetval) override;
+  virtual bool RecvLstat(const nsString& aPath, StatWrapper* aRetVal) override;
+  virtual bool RecvStat(const nsString& aPath, StatWrapper* aRetVal) override;
+  virtual bool RecvUnlink(const nsString& aPath, int* aRetVal) override;
 
   virtual bool RecvChmod(const nsString& aPath,
                          const int& aPermission,
-                         int* aRetval) override;
+                         int* aRetVal) override;
 
   virtual bool RecvUtimes(const nsString& aPath,
                           const double& aActime,
                           const double& aModtime,
-                          int* aRetval) override;
+                          int* aRetVal) override;
 
   virtual bool RecvLutimes(const nsString& aPath,
                            const double& aActime,
                            const double& aModtime,
-                           int* aRetval) override;
+                           int* aRetVal) override;
 
   virtual bool RecvTruncate(const nsString& aPath,
                             const int& aLength,
-                            int* aRetval) override;
+                            int* aRetVal) override;
 
   virtual bool RecvMkdir(const nsString& aPath,
                          const int& aMode,
-                         int* aRetval) override;
+                         int* aRetVal) override;
 
-  virtual bool RecvRmdir(const nsString& aPath, int* aRetval) override;
+  virtual bool RecvRmdir(const nsString& aPath, int* aRetVal) override;
 
   virtual bool RecvRename(const nsString& aOldPath,
                           const nsString& aNewPath,
-                          int* aRetval) override;
+                          int* aRetVal) override;
 
   virtual bool RecvReaddir(const nsString& aPath,
-                           ReaddirResponse* aRetval) override;
+                           ReaddirResponse* aRetVal) override;
 
   virtual bool RecvSymlink(const nsString& aPath1,
                            const nsString& aPath2,
-                           int* aRetval) override;
+                           int* aRetVal) override;
 
   virtual bool RecvReadlink(const nsString& aPath,
-                            ReadlinkResponse* aRetval) override;
+                            ReadlinkResponse* aRetVal) override;
 
   virtual void ActorDestroy(ActorDestroyReason aWhy) override;
 };
