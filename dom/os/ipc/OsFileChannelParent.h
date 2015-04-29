@@ -26,7 +26,7 @@ private:
   OsFileChannelParent();
   ~OsFileChannelParent();
 
-  bool VerifyRights(const char* aPath);
+  bool VerifyRights(char* aPath);
 
   virtual bool RecvOpen(const nsString& aPath,
                         const int& aAccess,
@@ -64,6 +64,9 @@ private:
   virtual bool RecvRename(const nsString& aOldPath,
                           const nsString& aNewPath,
                           int* aRetval) override;
+
+  virtual bool RecvReaddir(const nsString& aPath,
+                           ReaddirResponse* aRetval) override;
 
   virtual void ActorDestroy(ActorDestroyReason aWhy) override;
 };

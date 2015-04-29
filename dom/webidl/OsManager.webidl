@@ -44,8 +44,10 @@ interface OsManager {
   [Throws]
   void rename(DOMString oldPath, DOMString newPath);
 
+  [Throws]
+  sequence<DOMString> readdir(DOMString path);
+
   /* Missing according to emscripten:
-   * readdir
    * symlink
    * readlink
    *

@@ -343,6 +343,25 @@ OsManager::Rename(const nsAString& aOldPath, const nsAString& aNewPath,
   }
 }
 
+void
+OsManager::Readdir(const nsAString& aPath, nsTArray<nsString>& aRetVal,
+                   ErrorResult& aRv)
+{
+  ReaddirResponse rdr = {};
+  bool ret = mActor->SendReaddir((nsString&)aPath, &rdr);
+  if (!ret) {
+    aRv.Throw(NS_ERROR_FAILURE);
+    return;
+  }
+
+  if (rdr.error() != 0) {
+    HandleErrno(rdr.error(), aRv);
+    return;
+  }
+
+  aRetVal = rdr.files();
+}
+
 } // namespace os
 } // namespace dom
 } // namespace mozilla

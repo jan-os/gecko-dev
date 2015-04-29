@@ -15,6 +15,7 @@
 #include "nsDirectoryServiceDefs.h"
 #include "nsDirectoryServiceUtils.h"
 #include "nsIFile.h"
+#include "nsTArray.h"
 #include "Stat.h"
 #include "WorkerFeature.h"
 #include "WorkerPrivate.h"
@@ -80,6 +81,9 @@ public:
 
   void Rename(const nsAString& aOldPath, const nsAString& aNewPath,
               ErrorResult& aRv);
+
+  void Readdir(const nsAString& aPath, nsTArray<nsString>& aRetVal,
+               ErrorResult& aRv);
 
   // stat operations
   already_AddRefed<os::Stat> Stat(const nsAString& aPath, ErrorResult& aRv);

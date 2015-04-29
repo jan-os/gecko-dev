@@ -13,6 +13,11 @@ struct FileDescriptorResponse {
   int error;
 };
 
+struct ReaddirResponse {
+  nsString[] files;
+  int error;
+};
+
 namespace mozilla {
 namespace dom {
 namespace os {
@@ -34,6 +39,7 @@ parent:
   sync Mkdir(nsString path, int mode) returns (int rv);
   sync Rmdir(nsString path) returns (int rv);
   sync Rename(nsString oldPath, nsString newPath) returns (int rv);
+  sync Readdir(nsString path) returns (ReaddirResponse rv);
 
 child:
   __delete__();
