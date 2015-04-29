@@ -329,6 +329,20 @@ OsManager::Rmdir(const nsAString& aPath, ErrorResult& aRv)
   }
 }
 
+void
+OsManager::Rename(const nsAString& aOldPath, const nsAString& aNewPath,
+                  ErrorResult& aRv)
+{
+  int rv;
+  bool ret = mActor->SendRename((nsString&)aOldPath, (nsString&)aNewPath, &rv);
+  if (!ret) {
+    aRv.Throw(NS_ERROR_FAILURE);
+  }
+  else if (rv != 0) {
+    HandleErrno(rv, aRv);
+  }
+}
+
 } // namespace os
 } // namespace dom
 } // namespace mozilla

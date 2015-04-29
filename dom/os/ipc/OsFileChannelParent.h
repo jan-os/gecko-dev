@@ -61,6 +61,10 @@ private:
 
   virtual bool RecvRmdir(const nsString& aPath, int* aRetval) override;
 
+  virtual bool RecvRename(const nsString& aOldPath,
+                          const nsString& aNewPath,
+                          int* aRetval) override;
+
   virtual void ActorDestroy(ActorDestroyReason aWhy) override;
 };
 

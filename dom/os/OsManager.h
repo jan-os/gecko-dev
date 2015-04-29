@@ -78,6 +78,9 @@ public:
   void Mkdir(const nsAString& aPath, int aMode, ErrorResult& aRv);
   void Rmdir(const nsAString& aPath, ErrorResult& aRv);
 
+  void Rename(const nsAString& aOldPath, const nsAString& aNewPath,
+              ErrorResult& aRv);
+
   // stat operations
   already_AddRefed<os::Stat> Stat(const nsAString& aPath, ErrorResult& aRv);
   already_AddRefed<os::Stat> Lstat(const nsAString& aPath, ErrorResult& aRv);

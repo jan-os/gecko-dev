@@ -351,6 +351,29 @@ OsFileChannelParent::RecvRmdir(const nsString& aPath, int* aRetval)
   return true;
 }
 
+bool
+OsFileChannelParent::RecvRename(const nsString& aOldPath,
+                                const nsString& aNewPath, int* aRetval)
+{
+  AssertIsOnBackgroundThread();
+
+  auto oldPath = NS_LossyConvertUTF16toASCII(aOldPath).get();
+  auto newPath = NS_LossyConvertUTF16toASCII(aNewPath).get();
+  if (!VerifyRights(oldPath) || !VerifyRights(newPath)) {
+    *aRetval = EACCES;
+    return true;
+  }
+
+  if (rename(oldPath, newPath) == -1) {
+    *aRetval = errno;
+  }
+  else {
+    *aRetval = 0;
+  }
+
+  return true;
+}
+
 void
 OsFileChannelParent::ActorDestroy(ActorDestroyReason aWhy)
 {

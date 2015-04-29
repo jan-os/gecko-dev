@@ -33,6 +33,7 @@ parent:
   sync Truncate(nsString path, int length) returns (int rv);
   sync Mkdir(nsString path, int mode) returns (int rv);
   sync Rmdir(nsString path) returns (int rv);
+  sync Rename(nsString oldPath, nsString newPath) returns (int rv);
 
 child:
   __delete__();

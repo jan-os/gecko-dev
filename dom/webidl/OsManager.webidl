@@ -41,9 +41,10 @@ interface OsManager {
   [Throws]
   void rmdir(DOMString path);
 
+  [Throws]
+  void rename(DOMString oldPath, DOMString newPath);
+
   /* Missing according to emscripten:
-   * rename
-   * unlink
    * readdir
    * symlink
    * readlink
