@@ -1,0 +1,7 @@
+{
+  "name": "OS test",
+  "description": "Test",
+  "launch_path": "http://mochi.test:8888/tests/dom/os/test/testapp_bla.html",
+  "type": "certified",
+  "permissions": {}
+}

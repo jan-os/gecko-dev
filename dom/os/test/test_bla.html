@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Blah</title>
+  <script type="application/javascript;version=1.7" src="/tests/SimpleTest/SimpleTest.js"></script>
+  <script type="application/javascript;version=1.7" src="shim_app_as_test.js"></script>
+  <link rel="stylesheet" type="text/css" href="/tests/SimpleTest/test.css" />
+</head>
+<body>
+
+<a target="_blank" href="https://bugzilla.mozilla.org/show_bug.cgi?id=1141021">os tests</a>
+<p id="display"></p>
+<div id="content">
+</div>
+<pre id="test"></pre>
+<script class="testbody" type="text/javascript;version=1.7">
+
+runAppTest({
+  appFile: 'testapp_bla.html',
+  appManifest: 'testapp_bla.manifest',
+  appType: 'certified',
+  extraPrefs: {
+    set: [["security.csp.enable", false]]
+  }
+});
+
+</script>
+
+</body>
+</html>
+
