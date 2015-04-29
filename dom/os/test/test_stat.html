@@ -64,7 +64,7 @@
       var w = new Worker(URL.createObjectURL(workerBlob));
 
       w.onmessage = e => {
-        ok(e.data.indexOf('stat err') === -1, 'ran successfully');
+        is(e.data.indexOf('stat err'), -1, 'ran successfully');
         if (e.data.indexOf('stat err') > -1) {
           dump('Failed to run: ' + e.data + '\n');
           return res();
@@ -74,25 +74,19 @@
           var data = JSON.parse(e.data);
         }
         catch(ex) {
-          ok(null, ex, 'is valid JSON');
+          ok(false, 'is valid JSON');
           return res();
         }
 
         for (var i = 0; i < 3; i++) {
-          ok((data[i].mode & 0170000) == 0100000, i + ' isFile');
-          ok((data[i].mode & 0170000) != 0040000, i + ' isDir');
-          ok(data[i].isFile, i + ' isFile2');
-          ok(!data[i].isDir, i + ' isDir2');
+          is((data[i].mode & 0170000), 0100000, i + ' isFile');
+          isnot((data[i].mode & 0170000), 0040000, i + ' isDir');
+          is(data[i].isFile, true, i + ' isFile2');
+          is(data[i].isDir, false, i + ' isDir2');
         }
 
-        ok(data[3] === 'No such file or directory', 'stat4');
-        if (data[3] !== 'No such file or directory') {
-          dump('stat4 is "' + data[3] + '"\n');
-        }
-        ok(data[4] === 'No such file or directory', 'stat5');
-        if (data[4] !== 'No such file or directory') {
-          dump('stat5 is "' + data[4] + '"\n');
-        }
+        is(data[3], 'No such file or directory', 'stat4');
+        is(data[4], 'No such file or directory', 'stat5');
 
         res();
       };

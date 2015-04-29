@@ -54,7 +54,7 @@
       var w = new Worker(URL.createObjectURL(workerBlob));
 
       w.onmessage = e => {
-        ok(e.data.indexOf('write err') === -1, 'ran successfully');
+        is(e.data.indexOf('write err'), -1, 'ran successfully');
         if (e.data.indexOf('write err') !== -1) {
           dump(e.data + '\n');
           return res();
@@ -64,20 +64,14 @@
           var data = JSON.parse(e.data);
         }
         catch(ex) {
-          ok(null, ex, fn + ' is valid JSON');
+          ok(false, fn + ' is valid JSON');
         }
 
-        ok(data.written === expected.length, 'written. exp: ' + expected.length + ', was: ' + data.written);
+        is(data.written, expected.length, 'written');
         var expectedData = expected.split('').map(c=>c.charCodeAt(0)).join(',');
-        if (data.data !== expectedData) {
-          dump('expected "' + expectedData + '", but was "' + data.data + '"\n');
-        }
-        ok(data.data === expectedData, 'data');
-        ok(!data.open2, 'open2');
-        ok(data.open2err === 'No such file or directory', 'open2err');
-        if (data.open2err !== 'No such file or directory') {
-          dump('open2err was "' + data.open2err + '"\n');
-        }
+        is(data.data, expectedData, 'data');
+        is(data.open2, undefined, 'open2');
+        is(data.open2err, 'No such file or directory', 'open2err');
 
         res();
       };

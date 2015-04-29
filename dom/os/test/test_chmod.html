@@ -78,7 +78,7 @@
       var w = new Worker(URL.createObjectURL(workerBlob));
 
       w.onmessage = e => {
-        ok(e.data.indexOf('chmod err') === -1, 'ran successfully');
+        is(e.data.indexOf('chmod err'), -1, 'ran successfully');
         if (e.data.indexOf('chmod err') !== -1) {
           dump(e.data + '\n');
           return res();
@@ -92,9 +92,9 @@
           return res();
         }
 
-        ok(data.mode1 === '-rwx------', 'mode1 (' + data.mode1 + ')');
-        ok(data.mode2 === '-rwx-w----', 'mode2 (' + data.mode2 + ')');
-        ok(data.mode3 === '---x--x--x', 'mode3 (' + data.mode3 + ')');
+        is(data.mode1, '-rwx------', 'mode1 (' + data.mode1 + ')');
+        is(data.mode2, '-rwx-w----', 'mode2 (' + data.mode2 + ')');
+        is(data.mode3, '---x--x--x', 'mode3 (' + data.mode3 + ')');
 
         res();
       };

@@ -38,7 +38,7 @@
       var w = new Worker(URL.createObjectURL(workerBlob));
 
       w.onmessage = e => {
-        ok(e.data.indexOf('open err') === -1, 'ran successfully');
+        is(e.data.indexOf('open err'), -1, 'ran successfully');
         if (e.data.indexOf('open err') !== -1) {
           dump(e.data + '\n');
           return res();
@@ -48,16 +48,13 @@
           var data = JSON.parse(e.data);
         }
         catch(ex) {
-          ok(null, ex, fn + ' is valid JSON');
+          ok(false, fn + ' is valid JSON');
         }
 
-        ok(data.hasFile === true, 'hasFile');
+        is(data.hasFile, true, 'hasFile');
 
         var expectedData = expected.split('').map(c=>c.charCodeAt(0)).join(',');
-        if (data.data !== expectedData) {
-          dump('expected "' + expectedData + '", but was "' + data.data + '"\n');
-        }
-        ok(data.data === expectedData, 'data');
+        is(data.data, expectedData, 'data');
 
         res();
       };

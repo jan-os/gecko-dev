@@ -30,14 +30,11 @@
         return SimpleTest.finish();
       }
 
-      ok(data.hasFile === true, 'hasFile');
+      is(data.hasFile, true, 'hasFile');
 
       var expected = 'This is data that you can read through the APIs!';
       var expectedData = expected.split('').map(c=>c.charCodeAt(0)).join(',');
-      if (data.data !== expectedData) {
-        dump('expected "' + expectedData + '", but was "' + data.data + '"\n');
-      }
-      ok(data.data === expectedData, 'data');
+      is(data.data, expectedData, 'data');
 
       SimpleTest.finish();
     }, false);
