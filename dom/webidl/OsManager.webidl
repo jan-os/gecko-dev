@@ -47,12 +47,13 @@ interface OsManager {
   [Throws]
   sequence<DOMString> readdir(DOMString path);
 
-  /* Missing according to emscripten:
-   * symlink
-   * readlink
-   *
-   * Other stuff
-   * lseek
+  [Throws]
+  void symlink(DOMString path1, DOMString path2);
+  [Throws]
+  DOMString readlink(DOMString path);
+
+  /*
+   * seek/lseek/fseek
    */
 
   [Constant]

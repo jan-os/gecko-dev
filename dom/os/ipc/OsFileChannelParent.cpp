@@ -430,6 +430,76 @@ OsFileChannelParent::RecvReaddir(const nsString& aPath,
   return true;
 }
 
+bool
+OsFileChannelParent::RecvSymlink(const nsString& aPath1,
+                                 const nsString& aPath2,
+                                 int* aRetval)
+{
+  // http://pubs.opengroup.org/onlinepubs/009695399/functions/symlink.html
+  // The string pointed to by path1 shall be treated only as a character
+  // string and shall not be validated as a pathname.
+
+  auto path1 = ToNewCString(aPath1);
+  auto path2 = ToNewCString(aPath2);
+  if (!VerifyRights(path2)) {
+    *aRetval = EACCES;
+    return true;
+  }
+
+  if (symlink(path1, path2) == -1) {
+    *aRetval = errno;
+  }
+  else {
+    *aRetval = 0;
+  }
+
+  free(path1);
+  free(path2);
+
+  return true;
+}
+
+bool
+OsFileChannelParent::RecvReadlink(const nsString& aPath,
+                                 ReadlinkResponse* aRetval)
+{
+  auto path = ToNewCString(aPath);
+  if (!VerifyRights(path)) {
+    *aRetval = *(new ReadlinkResponse(NS_LITERAL_STRING(""), EACCES));
+    return true;
+  }
+
+  int buffer_size = 255;
+  char* buffer = NULL;
+
+  while (1) {
+    buffer = (char*)realloc(buffer, buffer_size);
+    if (!buffer) {
+      *aRetval = *(new ReadlinkResponse(NS_LITERAL_STRING(""), ENOMEM));
+      free(path);
+      return true;
+    }
+
+    int rl = readlink(path, buffer, buffer_size);
+    if (rl == -1) {
+      *aRetval = *(new ReadlinkResponse(NS_LITERAL_STRING(""), errno));
+      free(path);
+      free(buffer);
+      return true;
+    }
+
+    if (rl < buffer_size) {
+      buffer[rl] = '\0';
+      *aRetval = *(new ReadlinkResponse(NS_ConvertASCIItoUTF16(buffer), 0));
+      free(path);
+      free(buffer);
+      return true;
+    }
+
+    buffer_size *= 2;
+  }
+}
+
 void
 OsFileChannelParent::ActorDestroy(ActorDestroyReason aWhy)
 {

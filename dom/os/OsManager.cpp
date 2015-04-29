@@ -362,6 +362,40 @@ OsManager::Readdir(const nsAString& aPath, nsTArray<nsString>& aRetVal,
   aRetVal = rdr.files();
 }
 
+
+void
+OsManager::Symlink(const nsAString& aPath1, const nsAString& aPath2,
+                   ErrorResult& aRv)
+{
+  int rv;
+  bool ret = mActor->SendSymlink((nsString&)aPath1, (nsString&)aPath2, &rv);
+  if (!ret) {
+    aRv.Throw(NS_ERROR_FAILURE);
+  }
+  else if (rv != 0) {
+    HandleErrno(rv, aRv);
+  }
+}
+
+void
+OsManager::Readlink(const nsAString& aPath, nsAString& aRetVal,
+                    ErrorResult& aRv)
+{
+  ReadlinkResponse rlr = {};
+  bool ret = mActor->SendReadlink((nsString&)aPath, &rlr);
+  if (!ret) {
+    aRv.Throw(NS_ERROR_FAILURE);
+    return;
+  }
+
+  if (rlr.error() != 0) {
+    HandleErrno(rlr.error(), aRv);
+    return;
+  }
+
+  aRetVal = rlr.link();
+}
+
 } // namespace os
 } // namespace dom
 } // namespace mozilla

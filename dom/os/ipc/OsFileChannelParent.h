@@ -68,6 +68,13 @@ private:
   virtual bool RecvReaddir(const nsString& aPath,
                            ReaddirResponse* aRetval) override;
 
+  virtual bool RecvSymlink(const nsString& aPath1,
+                           const nsString& aPath2,
+                           int* aRetval) override;
+
+  virtual bool RecvReadlink(const nsString& aPath,
+                            ReadlinkResponse* aRetval) override;
+
   virtual void ActorDestroy(ActorDestroyReason aWhy) override;
 };
 

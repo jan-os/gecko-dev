@@ -85,6 +85,10 @@ public:
   void Readdir(const nsAString& aPath, nsTArray<nsString>& aRetVal,
                ErrorResult& aRv);
 
+  void Symlink(const nsAString& aPath1, const nsAString& aPath2,
+               ErrorResult& aRv);
+  void Readlink(const nsAString& aPath, nsAString& aRetVal, ErrorResult& aRv);
+
   // stat operations
   already_AddRefed<os::Stat> Stat(const nsAString& aPath, ErrorResult& aRv);
   already_AddRefed<os::Stat> Lstat(const nsAString& aPath, ErrorResult& aRv);

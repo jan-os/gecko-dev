@@ -18,6 +18,11 @@ struct ReaddirResponse {
   int error;
 };
 
+struct ReadlinkResponse {
+  nsString link;
+  int error;
+};
+
 namespace mozilla {
 namespace dom {
 namespace os {
@@ -40,6 +45,8 @@ parent:
   sync Rmdir(nsString path) returns (int rv);
   sync Rename(nsString oldPath, nsString newPath) returns (int rv);
   sync Readdir(nsString path) returns (ReaddirResponse rv);
+  sync Symlink(nsString path1, nsString path2) returns (int rv);
+  sync Readlink(nsString path) returns (ReadlinkResponse rv);
 
 child:
   __delete__();
