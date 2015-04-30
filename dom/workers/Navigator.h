@@ -34,7 +34,7 @@ class WorkerNavigator final : public nsWrapperCache
 
   NavigatorProperties mProperties;
   bool mOnline;
-  nsRefPtr<os::OsManager> mOsManager;
+  os::OsManager* mOsManager = nullptr;
 
   WorkerNavigator(const NavigatorProperties& aProperties,
                   bool aOnline)
@@ -46,6 +46,10 @@ class WorkerNavigator final : public nsWrapperCache
 
   ~WorkerNavigator()
   {
+    if (mOsManager) {
+      free(mOsManager);
+    }
+    
     MOZ_COUNT_DTOR(WorkerNavigator);
   }
 
