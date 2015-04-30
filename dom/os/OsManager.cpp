@@ -12,13 +12,19 @@
 #include <sys/types.h>
 #include <utime.h>
 #include "jsapi.h"
+#include "mozIApplication.h"
 #include "mozilla/DOMEventTargetHelper.h"
 #include "mozilla/dom/OsManagerBinding.h"
 #include "mozilla/ipc/BackgroundChild.h"
 #include "mozilla/ipc/BackgroundUtils.h"
 #include "mozilla/ipc/FileDescriptor.h"
 #include "mozilla/ipc/PBackgroundChild.h"
+#include "nsArrayUtils.h"
+#include "nsIAppsService.h"
 #include "nsIDOMClassInfo.h"
+#include "nsIServiceManager.h"
+#include "nsISupportsPrimitives.h"
+#include "nsThreadUtils.h"
 #include "OsManager.h"
 #include "StatSerializer.h"
 
@@ -26,13 +32,75 @@ namespace mozilla {
 namespace dom {
 namespace os {
 
+typedef void (*TestCallback)(const nsTArray<nsString>& aResult);
+
 using mozilla::ipc::FileDescriptor;
+
+class TestRunnable : public nsRunnable {
+public:
+  TestRunnable(uint32_t aAppId, TestCallback aCallback)
+    : mAppId(aAppId)
+    , mCallback(aCallback)
+  {
+    MOZ_ASSERT(!NS_IsMainThread());
+  }
+
+  NS_IMETHOD Run() {
+    MOZ_ASSERT(NS_IsMainThread());
+
+    nsCOMPtr<nsIAppsService> appsService = do_GetService(APPS_SERVICE_CONTRACTID);
+    if (!appsService) {
+      printf("No appsService...\n");
+      return NS_ERROR_FAILURE;
+    }
+
+    nsCOMPtr<mozIApplication> app;
+    nsresult rv = appsService->GetAppByLocalId(mAppId, getter_AddRefs(app));
+    if (NS_FAILED(rv)) {
+      printf("GetAppByLocalId failed\n");
+      return rv;
+    }
+    if (!app) {
+      printf("Could not get app... %d\n", mAppId);
+      return NS_ERROR_FAILURE;
+    }
+
+    nsCOMPtr<nsIArray> osPaths;
+    app->GetOsPaths(getter_AddRefs(osPaths));
+
+    uint32_t length;
+    osPaths->GetLength(&length);
+
+    nsTArray<nsString> options;
+    for (uint32_t j = 0; j < length; ++j) {
+      nsCOMPtr<nsISupportsString> iss = do_QueryElementAt(osPaths, j);
+      if (!iss)
+        return NS_ERROR_FAILURE;
+
+      nsAutoString path;
+      iss->GetData(path);
+      options.AppendElement(path);
+    }
+
+    mCallback(options);
+    return NS_OK;
+  }
+private:
+  uint32_t mAppId;
+  TestCallback mCallback;
+};
 
 NS_IMPL_ADDREF_INHERITED(OsManager, DOMEventTargetHelper)
 NS_IMPL_RELEASE_INHERITED(OsManager, DOMEventTargetHelper)
 
 NS_INTERFACE_MAP_BEGIN(OsManager)
 NS_INTERFACE_MAP_END_INHERITING(DOMEventTargetHelper)
+
+
+void OnBlabla(const nsTArray<nsString>& aResult)
+{
+  printf("OsManager::OnBlabla %d\n", aResult.Length());
+}
 
 OsManager::OsManager(workers::WorkerGlobalScope* aScope)
   : DOMEventTargetHelper(static_cast<DOMEventTargetHelper*>(aScope)),
@@ -43,6 +111,20 @@ OsManager::OsManager(workers::WorkerGlobalScope* aScope)
   mActor = backgroundChild->SendPOsFileChannelConstructor();
 
   MOZ_ASSERT(mActor);
+
+  auto principal = workers::GetCurrentThreadWorkerPrivate()->GetPrincipal();
+  uint32_t appId;
+  nsresult rv = principal->GetAppId(&appId);
+  if (NS_FAILED(rv)) {
+    printf("Could not get appId... What now?\n");
+    return;
+  }
+  MOZ_ASSERT(appId != nsIScriptSecurityManager::UNKNOWN_APP_ID);
+
+  rv = NS_DispatchToMainThread(new TestRunnable(appId, &OnBlabla));
+  if (NS_FAILED(rv)) {
+    printf("DispatchToMainThread failed...\n");
+  }
 }
 
 JSObject*
@@ -50,6 +132,7 @@ OsManager::WrapObject(JSContext* aCx, JS::Handle<JSObject*> aGivenProto)
 {
   return OsManagerBinding::Wrap(aCx, this, aGivenProto);
 }
+
 
 void
 OsManager::HandleErrno(int aErr, ErrorResult& aRv)

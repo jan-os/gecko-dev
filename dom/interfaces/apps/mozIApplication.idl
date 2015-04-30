@@ -8,6 +8,7 @@
 #include "domstubs.idl"
 
 interface nsIPrincipal;
+interface nsIArray;
 
 /**
  * We expose Gecko-internal helpers related to "web apps" through this
@@ -63,4 +64,8 @@ interface mozIApplication: nsISupports
 
   /* Returns the app's principal */
   readonly attribute nsIPrincipal principal;
+
+  /* If the app has access to the os module, lists all the paths that the app
+     is allowed to access */
+  readonly attribute nsIArray osPaths; // DOMString[]
 };

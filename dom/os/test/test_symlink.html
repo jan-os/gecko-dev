@@ -20,7 +20,6 @@
       var workerCode = `
         try {
           var path = navigator.os.TEMP_DIR + '/test_symlink';
-          dump('path is ' + path);
           try {
             navigator.os.unlink(path);
           }
