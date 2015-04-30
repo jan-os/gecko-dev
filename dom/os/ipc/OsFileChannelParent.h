@@ -78,6 +78,9 @@ private:
                             ReadlinkResponse* aRetVal) override;
 
   virtual void ActorDestroy(ActorDestroyReason aWhy) override;
+
+  bool mInitialized = false;
+  nsTArray<nsString> mAllowedPaths;
 };
 
 } // os namespace

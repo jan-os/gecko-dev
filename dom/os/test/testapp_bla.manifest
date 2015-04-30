@@ -5,7 +5,8 @@
   "type": "certified",
   "permissions": {
     "os": [
-      "/zus/zo"
+      "/zus/zo",
+      "TEMPDIR"
     ]
   }
 }

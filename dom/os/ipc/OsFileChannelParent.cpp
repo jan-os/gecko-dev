@@ -9,6 +9,7 @@
 #include <sys/time.h>
 #include "mozilla/ipc/BackgroundParent.h"
 #include "mozilla/unused.h"
+#include "nsISupportsPrimitives.h"
 #include "OsFileChannelParent.h"
 
 namespace mozilla {
@@ -78,14 +79,34 @@ OsFileChannelParent::VerifyRights(char* aPath)
 
   // not null? then time to check... real_path is the path we need to check
 
+  // avoid breaking tests until the thread-stuff is sync
+  if (!mInitialized) {
+    free(real_path);
+    return true;
+  }
+
+  nsString rp = NS_ConvertASCIItoUTF16(real_path);
+  uint32_t len = mAllowedPaths.Length();
+  for (uint32_t j = 0; j < len; j++) {
+    char* s = ToNewCString(mAllowedPaths[j]);
+    int res = rp.Find(s, false, 0, -1);
+    free(s);
+    if (res == 0) {
+      free(real_path);
+      return true;
+    }
+  }
+
   free(real_path);
-  return true;
+  return false;
 }
 
 bool
 OsFileChannelParent::RecvInit(nsTArray<nsString>&& allowedPaths)
 {
-  printf("OsFileChannelParent::RecvInit %d\n", allowedPaths.Length());
+  mInitialized = true;
+  mAllowedPaths = allowedPaths;
+
   return true;
 }
 

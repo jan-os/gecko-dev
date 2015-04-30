@@ -52,7 +52,6 @@ public:
   }
 
   NS_IMETHOD Run() {
-    printf("Back on old thread yo!\n");
     MOZ_ASSERT(!NS_IsMainThread());
 
     mCallback(mOsManager, mResult);
@@ -68,7 +67,8 @@ private:
 // Worker thread -> Main thread asking for the permissions
 class PermissionsRunnable : public nsRunnable {
 public:
-  PermissionsRunnable(OsManager* aOsManager, uint32_t aAppId, PermissionsCallback aCallback)
+  PermissionsRunnable(OsManager* aOsManager, uint32_t aAppId,
+                      PermissionsCallback aCallback)
     : mAppId(aAppId)
     , mCallback(aCallback)
     , mOsManager(aOsManager)
@@ -111,10 +111,26 @@ public:
 
       nsAutoString path;
       iss->GetData(path);
-      options.AppendElement(path);
+
+      if (path.Equals(NS_LITERAL_STRING("TEMPDIR"))) {
+        nsString tmpDirPath;
+        nsCOMPtr<nsIFile> tmpDir;
+        nsresult rv = NS_GetSpecialDirectory(NS_OS_TEMP_DIR,
+                                             getter_AddRefs(tmpDir));
+        if (NS_FAILED(rv)) {
+          continue;
+        }
+        tmpDir->GetPath(tmpDirPath);
+        options.AppendElement(tmpDirPath);
+      }
+      else {
+        options.AppendElement(path);
+      }
     }
 
-    rv = mThread->Dispatch(new ReceivePermissionsRunnable(mOsManager, options, mCallback),  NS_DISPATCH_NORMAL);
+    rv = mThread->Dispatch(
+      new ReceivePermissionsRunnable(mOsManager, options, mCallback),
+      NS_DISPATCH_NORMAL);
     NS_ENSURE_SUCCESS(rv, rv);
 
     return NS_OK;
@@ -127,9 +143,9 @@ private:
 };
 
 
-void OnReceivePermissions(OsManager* osManager, const nsTArray<nsString>& aResult)
+void OnReceivePermissions(OsManager* osManager,
+                          const nsTArray<nsString>& aResult)
 {
-  printf("OnReceivePermissions\n");
   MOZ_ASSERT(!NS_IsMainThread());
 
   osManager->mActor->SendInit(aResult);
@@ -155,7 +171,7 @@ OsManager::OsManager(workers::WorkerGlobalScope* aScope)
   MOZ_ASSERT(appId != nsIScriptSecurityManager::UNKNOWN_APP_ID);
 
   rv = NS_DispatchToMainThread(new PermissionsRunnable(this, appId,
-    &OnReceivePermissions)); /* OnReceivePermissions */
+    &OnReceivePermissions), NS_DISPATCH_NORMAL); /* OnReceivePermissions */
   if (NS_FAILED(rv)) {
     printf("DispatchToMainThread failed...\n");
   }

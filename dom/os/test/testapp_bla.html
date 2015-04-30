@@ -11,8 +11,9 @@
   function runTest(expected) {
     return new Promise((res, rej) => {
       var workerCode = `
+        var path = navigator.os.TEMP_DIR + '/test_writefile';
+        setTimeout(() => {
         try {
-          var path = navigator.os.TEMP_DIR + '/test_writefile';
           var file = navigator.os.open(path,
             navigator.os.RDWR | navigator.os.CREAT, 0666);
           var arr = new Uint8Array("` + expected + `".split('').map(c => c.charCodeAt(0)));
@@ -25,22 +26,35 @@
 
           var open2err = null;
           try {
-            var open2 = navigator.os.open('/non/existing/path', navigator.os.RDWR, 0666);
+            var open2 = navigator.os.open(navigator.os.TEMP_DIR + '/non/existing/path',
+              navigator.os.RDWR, 0666);
           }
           catch (ex) {
             open2err = ex;
+          }
+
+          var open3err = null;
+          try {
+            var open3 = navigator.os.open('/non/existing/path',
+              navigator.os.RDWR, 0666);
+          }
+          catch (ex) {
+            open3err = ex;
           }
 
           postMessage(JSON.stringify({
             data: data.join(','),
             written: written,
             open2: open2,
-            open2err: open2err
+            open2err: open2err,
+            open3: open3,
+            open3err: open3err
           }));
         }
         catch (ex) {
           postMessage("write err: " + ex);
         }
+        }, 500);
         `;
 
       var workerBlob = new Blob([workerCode], { type: 'application/javascript' });
@@ -65,6 +79,8 @@
         is(data.data, expectedData, 'data');
         is(data.open2, undefined, 'open2');
         is(data.open2err, 'No such file or directory', 'open2err');
+        is(data.open3, undefined, 'open3');
+        is(data.open3err, 'Permission denied', 'open3err');
 
         res();
       };
