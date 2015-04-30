@@ -83,6 +83,13 @@ OsFileChannelParent::VerifyRights(char* aPath)
 }
 
 bool
+OsFileChannelParent::RecvInit(nsTArray<nsString>&& allowedPaths)
+{
+  printf("OsFileChannelParent::RecvInit %d\n", allowedPaths.Length());
+  return true;
+}
+
+bool
 OsFileChannelParent::RecvOpen(const nsString& aPath,
                               const int& aAccess,
                               const int& aPermission,

@@ -30,6 +30,8 @@ namespace os {
 
 using mozilla::dom::Date;
 
+typedef void (*PermissionsCallback)(OsManager* aOsManager, const nsTArray<nsString>& aResult);
+
 class OsManager final : public DOMEventTargetHelper
 {
 public:
@@ -41,6 +43,8 @@ public:
   void Shutdown();
 
   virtual JSObject* WrapObject(JSContext* aCx, JS::Handle<JSObject*> aGivenProto) override;
+
+  POsFileChannelChild* mActor;
 
   /**
    * WebIDL Interface
@@ -144,7 +148,6 @@ protected:
 
 private:
   void HandleErrno(int aErr, ErrorResult& aRv);
-  POsFileChannelChild* mActor;
   workers::WorkerGlobalScope* mScope;
 };
 

@@ -28,6 +28,8 @@ private:
 
   bool VerifyRights(char* aPath);
 
+  virtual bool RecvInit(nsTArray<nsString>&& allowedPaths);
+
   virtual bool RecvOpen(const nsString& aPath,
                         const int& aAccess,
                         const int& aPermission,

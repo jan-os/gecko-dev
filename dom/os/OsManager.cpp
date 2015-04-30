@@ -32,15 +32,47 @@ namespace mozilla {
 namespace dom {
 namespace os {
 
-typedef void (*TestCallback)(const nsTArray<nsString>& aResult);
-
 using mozilla::ipc::FileDescriptor;
 
-class TestRunnable : public nsRunnable {
+NS_IMPL_ADDREF_INHERITED(OsManager, DOMEventTargetHelper)
+NS_IMPL_RELEASE_INHERITED(OsManager, DOMEventTargetHelper)
+
+NS_INTERFACE_MAP_BEGIN(OsManager)
+NS_INTERFACE_MAP_END_INHERITING(DOMEventTargetHelper)
+
+// Main thread -> Worker thread with the results for permissions
+class ReceivePermissionsRunnable : public nsRunnable {
 public:
-  TestRunnable(uint32_t aAppId, TestCallback aCallback)
+  ReceivePermissionsRunnable(OsManager* aOsManager, const nsTArray<nsString>& aResult, PermissionsCallback aCallback)
+    : mCallback(aCallback)
+    , mOsManager(aOsManager)
+    , mResult(aResult)
+  {
+    MOZ_ASSERT(NS_IsMainThread());
+  }
+
+  NS_IMETHOD Run() {
+    printf("Back on old thread yo!\n");
+    MOZ_ASSERT(!NS_IsMainThread());
+
+    mCallback(mOsManager, mResult);
+
+    return NS_OK;
+  }
+private:
+  PermissionsCallback mCallback;
+  OsManager* mOsManager;
+  nsTArray<nsString> mResult;
+};
+
+// Worker thread -> Main thread asking for the permissions
+class PermissionsRunnable : public nsRunnable {
+public:
+  PermissionsRunnable(OsManager* aOsManager, uint32_t aAppId, PermissionsCallback aCallback)
     : mAppId(aAppId)
     , mCallback(aCallback)
+    , mOsManager(aOsManager)
+    , mThread(do_GetCurrentThread())
   {
     MOZ_ASSERT(!NS_IsMainThread());
   }
@@ -82,24 +114,25 @@ public:
       options.AppendElement(path);
     }
 
-    mCallback(options);
+    rv = mThread->Dispatch(new ReceivePermissionsRunnable(mOsManager, options, mCallback),  NS_DISPATCH_NORMAL);
+    NS_ENSURE_SUCCESS(rv, rv);
+
     return NS_OK;
   }
 private:
   uint32_t mAppId;
-  TestCallback mCallback;
+  PermissionsCallback mCallback;
+  OsManager* mOsManager;
+  nsCOMPtr<nsIThread> mThread;
 };
 
-NS_IMPL_ADDREF_INHERITED(OsManager, DOMEventTargetHelper)
-NS_IMPL_RELEASE_INHERITED(OsManager, DOMEventTargetHelper)
 
-NS_INTERFACE_MAP_BEGIN(OsManager)
-NS_INTERFACE_MAP_END_INHERITING(DOMEventTargetHelper)
-
-
-void OnBlabla(const nsTArray<nsString>& aResult)
+void OnReceivePermissions(OsManager* osManager, const nsTArray<nsString>& aResult)
 {
-  printf("OsManager::OnBlabla %d\n", aResult.Length());
+  printf("OnReceivePermissions\n");
+  MOZ_ASSERT(!NS_IsMainThread());
+
+  osManager->mActor->SendInit(aResult);
 }
 
 OsManager::OsManager(workers::WorkerGlobalScope* aScope)
@@ -121,7 +154,8 @@ OsManager::OsManager(workers::WorkerGlobalScope* aScope)
   }
   MOZ_ASSERT(appId != nsIScriptSecurityManager::UNKNOWN_APP_ID);
 
-  rv = NS_DispatchToMainThread(new TestRunnable(appId, &OnBlabla));
+  rv = NS_DispatchToMainThread(new PermissionsRunnable(this, appId,
+    &OnReceivePermissions)); /* OnReceivePermissions */
   if (NS_FAILED(rv)) {
     printf("DispatchToMainThread failed...\n");
   }
