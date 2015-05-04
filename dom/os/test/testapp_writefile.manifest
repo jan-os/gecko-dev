@@ -4,9 +4,11 @@
   "launch_path": "http://mochi.test:8888/tests/dom/os/test/testapp_writefile.html",
   "type": "certified",
   "permissions": {
-    "os": [
-      "/zus/zo",
-      "TEMPDIR"
-    ]
+    "posix-files": {
+      "paths": [
+        "/zus/zo",
+        "TEMPDIR"
+      ]
+    }
   }
 }

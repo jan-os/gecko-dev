@@ -32,7 +32,7 @@ this.EXPORTED_SYMBOLS =
   ["AppsUtils", "ManifestHelper", "isAbsoluteURI", "mozIApplication"];
 
 function debug(s) {
-  // dump("-*- AppsUtils.jsm: " + s + "\n");
+  //dump("-*- AppsUtils.jsm: " + s + "\n");
 }
 
 this.isAbsoluteURI = function(aURI) {
@@ -137,7 +137,8 @@ function _setAppProperties(aObj, aApp) {
 
   let osPaths = Cc["@mozilla.org/array;1"].createInstance(Ci.nsIMutableArray);
   let os = (aApp.manifest && aApp.manifest.permissions &&
-            aApp.manifest.permissions.os) || [];
+            aApp.manifest.permissions['posix-files'] &&
+            aApp.manifest.permissions['posix-files'].paths) || [];
   os.forEach(function(path) {
     let wrapper = Cc["@mozilla.org/supports-string;1"]
                           .createInstance(Ci.nsISupportsString);
