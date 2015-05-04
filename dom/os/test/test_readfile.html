@@ -63,12 +63,13 @@
 
   SimpleTest.waitForExplicitFinish();
 
-  Promise.all([
-    runTest(20, 'This is data that yo'),
-    runTest(2000, 'This is data that you can read through the APIs!') // read too much data
-  ]).then(() => {
-    SimpleTest.finish();
-  });
+  SpecialPowers.pushPrefEnv({"set":[["dom.os.security.disabled", true]]},
+    Promise.all([
+      runTest(20, 'This is data that yo'),
+      runTest(2000, 'This is data that you can read through the APIs!') // read too much data
+    ]).then(() => {
+      SimpleTest.finish();
+    }));
   </script>
 </body>
 </html>

@@ -53,9 +53,10 @@ OsManager::OsManager(workers::WorkerGlobalScope* aScope)
     printf("Could not get appId... What now?\n");
     return;
   }
-  MOZ_ASSERT(appId != nsIScriptSecurityManager::UNKNOWN_APP_ID);
-  
-  MOZ_ASSERT(mActor->SendInit(appId));
+
+  bool initValue = mActor->SendInit(appId);
+  // So this is only in debug builds, right? But it should always halt when this fails...
+  MOZ_ASSERT(initValue == true);
 }
 
 JSObject*

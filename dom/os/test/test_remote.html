@@ -47,7 +47,10 @@
   SpecialPowers.pushPermissions([
     { "type": "browser", "allow": 1, "context": document }
   ], () => {
-    SpecialPowers.pushPrefEnv({"set":[["dom.mozBrowserFramesEnabled", true]]}, runTest);
+    SpecialPowers.pushPrefEnv({"set": [
+      [ "dom.mozBrowserFramesEnabled", true ],
+      [ "dom.os.security.disabled", true ]
+    ]}, runTest);
   });
   </script>
 </body>

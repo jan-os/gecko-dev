@@ -1,4 +1,4 @@
-[Exposed=(Worker,System)]
+[Exposed=(Worker,System), AvailableIn=CertifiedApps]
 interface OsManager {
   [Throws]
   OsManagerFd open(DOMString path, long access, optional long permission = 0);

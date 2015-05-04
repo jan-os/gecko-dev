@@ -80,11 +80,12 @@
 
   SimpleTest.waitForExplicitFinish();
 
-  Promise.all([
-    runTest('Hello world')
-  ]).then(() => {
-    SimpleTest.finish();
-  });
+  SpecialPowers.pushPrefEnv({"set":[["dom.os.security.disabled", true]]},
+    Promise.all([
+      runTest('Hello world')
+    ]).then(() => {
+      SimpleTest.finish();
+    }));
   </script>
 </body>
 </html>

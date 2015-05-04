@@ -20,7 +20,6 @@
 #include "nsThreadUtils.h"
 #include "OsFileChannelParent.h"
 
-
 namespace mozilla {
 
 using namespace ipc;
@@ -46,6 +45,12 @@ public:
 
   NS_IMETHOD Run() {
     MOZ_ASSERT(NS_IsMainThread());
+    
+    printf("Unknown appId, security=%d\n", Preferences::GetBool("dom.os.security.disabled"));
+    if (Preferences::GetBool("dom.os.security.disabled")) {
+      mResult->AppendElement(NS_LITERAL_STRING("/"));
+      return NS_OK;
+    }
 
     nsCOMPtr<nsIAppsService> appsService = do_GetService(APPS_SERVICE_CONTRACTID);
     if (!appsService) {
@@ -107,7 +112,7 @@ private:
  * before returning!
  * If the return value is true, you need to free() yourself.
  */
-nsresult
+bool
 OsFileChannelParent::VerifyRights(char* aPath)
 {
   if (!aPath) {
@@ -151,18 +156,11 @@ OsFileChannelParent::VerifyRights(char* aPath)
 
   // not null? then time to check... real_path is the path we need to check
 
-  // avoid breaking tests until the thread-stuff is sync
-  if (!mInitialized) {
-    free(real_path);
-    return true;
-  }
-
   nsString rp = NS_ConvertASCIItoUTF16(real_path);
   uint32_t len = mAllowedPaths.Length();
   for (uint32_t j = 0; j < len; j++) {
     char* s = ToNewCString(mAllowedPaths[j]);
     int res = rp.Find(s, false, 0, -1);
-    printf("%s.Find(%s) = %d\n", rp.get(), s, res);
     free(s);
     if (res == 0) {
       free(real_path);
