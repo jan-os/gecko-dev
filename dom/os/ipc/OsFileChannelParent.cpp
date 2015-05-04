@@ -7,10 +7,19 @@
 #include <errno.h>
 #include <libgen.h>
 #include <sys/time.h>
+#include "mozIApplication.h"
 #include "mozilla/ipc/BackgroundParent.h"
+#include "mozilla/Preferences.h"
 #include "mozilla/unused.h"
+#include "nsArrayUtils.h"
+#include "nsDirectoryServiceDefs.h"
+#include "nsDirectoryServiceUtils.h"
+#include "nsIAppsService.h"
+#include "nsIFile.h"
 #include "nsISupportsPrimitives.h"
+#include "nsThreadUtils.h"
 #include "OsFileChannelParent.h"
+
 
 namespace mozilla {
 
@@ -30,12 +39,75 @@ OsFileChannelParent::~OsFileChannelParent()
   AssertIsOnBackgroundThread();
 }
 
+class GetAllowedPaths : public nsRunnable {
+public:
+  GetAllowedPaths(const int aAppId, nsTArray<nsString>* aResult)
+    : mAppId(aAppId), mResult(aResult) {}
+
+  NS_IMETHOD Run() {
+    MOZ_ASSERT(NS_IsMainThread());
+
+    nsCOMPtr<nsIAppsService> appsService = do_GetService(APPS_SERVICE_CONTRACTID);
+    if (!appsService) {
+      printf("No appsService...\n");
+      return NS_ERROR_FAILURE;
+    }
+
+    nsCOMPtr<mozIApplication> app;
+    nsresult rv = appsService->GetAppByLocalId(mAppId, getter_AddRefs(app));
+    if (NS_FAILED(rv)) {
+      printf("GetAppByLocalId failed\n");
+      return rv;
+    }
+    if (!app) {
+      printf("Could not get app... %d\n", mAppId);
+      return NS_ERROR_FAILURE;
+    }
+
+    nsCOMPtr<nsIArray> osPaths;
+    app->GetOsPaths(getter_AddRefs(osPaths));
+
+    uint32_t length;
+    osPaths->GetLength(&length);
+
+    for (uint32_t j = 0; j < length; ++j) {
+      nsCOMPtr<nsISupportsString> iss = do_QueryElementAt(osPaths, j);
+      if (!iss)
+        return NS_ERROR_FAILURE;
+
+      nsAutoString path;
+      iss->GetData(path);
+
+      if (path.Equals(NS_LITERAL_STRING("TEMPDIR"))) {
+        nsString tmpDirPath;
+        nsCOMPtr<nsIFile> tmpDir;
+        nsresult rv = NS_GetSpecialDirectory(NS_OS_TEMP_DIR,
+                                            getter_AddRefs(tmpDir));
+        if (NS_FAILED(rv)) {
+          continue;
+        }
+        tmpDir->GetPath(tmpDirPath);
+        mResult->AppendElement(tmpDirPath);
+      }
+      else {
+        mResult->AppendElement(path);
+      }
+    }
+
+    return NS_OK;
+  }
+
+private:
+  const int mAppId;
+  nsTArray<nsString>* mResult;
+};
+
 /**
  * If the return value of this function is false, aPath will be free'd
  * before returning!
  * If the return value is true, you need to free() yourself.
  */
-bool
+nsresult
 OsFileChannelParent::VerifyRights(char* aPath)
 {
   if (!aPath) {
@@ -90,6 +162,7 @@ OsFileChannelParent::VerifyRights(char* aPath)
   for (uint32_t j = 0; j < len; j++) {
     char* s = ToNewCString(mAllowedPaths[j]);
     int res = rp.Find(s, false, 0, -1);
+    printf("%s.Find(%s) = %d\n", rp.get(), s, res);
     free(s);
     if (res == 0) {
       free(real_path);
@@ -102,12 +175,13 @@ OsFileChannelParent::VerifyRights(char* aPath)
 }
 
 bool
-OsFileChannelParent::RecvInit(nsTArray<nsString>&& allowedPaths)
+OsFileChannelParent::RecvInit(const int& aAppId)
 {
+  nsCOMPtr<nsIRunnable> event = new GetAllowedPaths(aAppId, &mAllowedPaths);
+  nsresult rv = NS_DispatchToMainThread(event, NS_DISPATCH_SYNC);
   mInitialized = true;
-  mAllowedPaths = allowedPaths;
 
-  return true;
+  return NS_SUCCEEDED(rv);
 }
 
 bool

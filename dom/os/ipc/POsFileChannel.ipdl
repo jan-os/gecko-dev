@@ -33,7 +33,7 @@ sync protocol POsFileChannel
   manager PBackground;
 
 parent:
-  sync Init(nsString[] allowedPaths);
+  sync Init(int appId);
 
   sync Open(nsString path, int access, int permission) returns (FileDescriptorResponse fd);
   sync Lstat(nsString path) returns (StatWrapper sb);

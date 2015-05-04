@@ -12,7 +12,6 @@
 #include <sys/types.h>
 #include <utime.h>
 #include "jsapi.h"
-#include "mozIApplication.h"
 #include "mozilla/DOMEventTargetHelper.h"
 #include "mozilla/dom/OsManagerBinding.h"
 #include "mozilla/ipc/BackgroundChild.h"
@@ -20,11 +19,8 @@
 #include "mozilla/ipc/FileDescriptor.h"
 #include "mozilla/ipc/PBackgroundChild.h"
 #include "nsArrayUtils.h"
-#include "nsIAppsService.h"
 #include "nsIDOMClassInfo.h"
 #include "nsIServiceManager.h"
-#include "nsISupportsPrimitives.h"
-#include "nsThreadUtils.h"
 #include "OsManager.h"
 #include "StatSerializer.h"
 
@@ -39,117 +35,6 @@ NS_IMPL_RELEASE_INHERITED(OsManager, DOMEventTargetHelper)
 
 NS_INTERFACE_MAP_BEGIN(OsManager)
 NS_INTERFACE_MAP_END_INHERITING(DOMEventTargetHelper)
-
-// Main thread -> Worker thread with the results for permissions
-class ReceivePermissionsRunnable : public nsRunnable {
-public:
-  ReceivePermissionsRunnable(OsManager* aOsManager, const nsTArray<nsString>& aResult, PermissionsCallback aCallback)
-    : mCallback(aCallback)
-    , mOsManager(aOsManager)
-    , mResult(aResult)
-  {
-    MOZ_ASSERT(NS_IsMainThread());
-  }
-
-  NS_IMETHOD Run() {
-    MOZ_ASSERT(!NS_IsMainThread());
-
-    mCallback(mOsManager, mResult);
-
-    return NS_OK;
-  }
-private:
-  PermissionsCallback mCallback;
-  OsManager* mOsManager;
-  nsTArray<nsString> mResult;
-};
-
-// Worker thread -> Main thread asking for the permissions
-class PermissionsRunnable : public nsRunnable {
-public:
-  PermissionsRunnable(OsManager* aOsManager, uint32_t aAppId,
-                      PermissionsCallback aCallback)
-    : mAppId(aAppId)
-    , mCallback(aCallback)
-    , mOsManager(aOsManager)
-    , mThread(do_GetCurrentThread())
-  {
-    MOZ_ASSERT(!NS_IsMainThread());
-  }
-
-  NS_IMETHOD Run() {
-    MOZ_ASSERT(NS_IsMainThread());
-
-    nsCOMPtr<nsIAppsService> appsService = do_GetService(APPS_SERVICE_CONTRACTID);
-    if (!appsService) {
-      printf("No appsService...\n");
-      return NS_ERROR_FAILURE;
-    }
-
-    nsCOMPtr<mozIApplication> app;
-    nsresult rv = appsService->GetAppByLocalId(mAppId, getter_AddRefs(app));
-    if (NS_FAILED(rv)) {
-      printf("GetAppByLocalId failed\n");
-      return rv;
-    }
-    if (!app) {
-      printf("Could not get app... %d\n", mAppId);
-      return NS_ERROR_FAILURE;
-    }
-
-    nsCOMPtr<nsIArray> osPaths;
-    app->GetOsPaths(getter_AddRefs(osPaths));
-
-    uint32_t length;
-    osPaths->GetLength(&length);
-
-    nsTArray<nsString> options;
-    for (uint32_t j = 0; j < length; ++j) {
-      nsCOMPtr<nsISupportsString> iss = do_QueryElementAt(osPaths, j);
-      if (!iss)
-        return NS_ERROR_FAILURE;
-
-      nsAutoString path;
-      iss->GetData(path);
-
-      if (path.Equals(NS_LITERAL_STRING("TEMPDIR"))) {
-        nsString tmpDirPath;
-        nsCOMPtr<nsIFile> tmpDir;
-        nsresult rv = NS_GetSpecialDirectory(NS_OS_TEMP_DIR,
-                                             getter_AddRefs(tmpDir));
-        if (NS_FAILED(rv)) {
-          continue;
-        }
-        tmpDir->GetPath(tmpDirPath);
-        options.AppendElement(tmpDirPath);
-      }
-      else {
-        options.AppendElement(path);
-      }
-    }
-
-    rv = mThread->Dispatch(
-      new ReceivePermissionsRunnable(mOsManager, options, mCallback),
-      NS_DISPATCH_NORMAL);
-    NS_ENSURE_SUCCESS(rv, rv);
-
-    return NS_OK;
-  }
-private:
-  uint32_t mAppId;
-  PermissionsCallback mCallback;
-  OsManager* mOsManager;
-  nsCOMPtr<nsIThread> mThread;
-};
-
-
-void OnReceivePermissions(OsManager* osManager,
-                          const nsTArray<nsString>& aResult)
-{
-  MOZ_ASSERT(!NS_IsMainThread());
-
-  osManager->mActor->SendInit(aResult);
-}
 
 OsManager::OsManager(workers::WorkerGlobalScope* aScope)
   : DOMEventTargetHelper(static_cast<DOMEventTargetHelper*>(aScope)),
@@ -169,12 +54,8 @@ OsManager::OsManager(workers::WorkerGlobalScope* aScope)
     return;
   }
   MOZ_ASSERT(appId != nsIScriptSecurityManager::UNKNOWN_APP_ID);
-
-  rv = NS_DispatchToMainThread(new PermissionsRunnable(this, appId,
-    &OnReceivePermissions), NS_DISPATCH_NORMAL); /* OnReceivePermissions */
-  if (NS_FAILED(rv)) {
-    printf("DispatchToMainThread failed...\n");
-  }
+  
+  MOZ_ASSERT(mActor->SendInit(appId));
 }
 
 JSObject*
@@ -182,7 +63,6 @@ OsManager::WrapObject(JSContext* aCx, JS::Handle<JSObject*> aGivenProto)
 {
   return OsManagerBinding::Wrap(aCx, this, aGivenProto);
 }
-
 
 void
 OsManager::HandleErrno(int aErr, ErrorResult& aRv)
