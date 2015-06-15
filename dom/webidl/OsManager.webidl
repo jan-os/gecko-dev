@@ -117,7 +117,7 @@ interface OsManager {
 
   // Should have some attribute in manifest that specifies access to this
   // dir... As it's platform specific.
-  [Constant]
+  [Constant, Throws]
   readonly attribute DOMString TEMP_DIR;
 };
 

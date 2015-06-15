@@ -77,8 +77,6 @@ private:
   virtual bool RecvReadlink(const nsString& aPath,
                             ReadlinkResponse* aRetVal) override;
 
-  virtual void ActorDestroy(ActorDestroyReason aWhy) override;
-
   bool mInitialized = false;
   nsTArray<nsString> mAllowedPaths;
 };

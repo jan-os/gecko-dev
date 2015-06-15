@@ -92,20 +92,19 @@ public:
     return mStat.st_blocks;
   }
 
-  // @todo: should we free() this stuff?
-  mozilla::dom::Date Atime() const
+  Date Atime() const
   {
-    return mozilla::dom::Date((double)mStat.st_atime * 1000);
+    return Date((double)mStat.st_atime * 1000);
   }
 
-  mozilla::dom::Date Mtime() const
+  Date Mtime() const
   {
-    return mozilla::dom::Date((double)mStat.st_mtime * 1000);
+    return Date((double)mStat.st_mtime * 1000);
   }
 
-  mozilla::dom::Date Ctime() const
+  Date Ctime() const
   {
-    return mozilla::dom::Date((double)mStat.st_ctime * 1000);
+    return Date((double)mStat.st_ctime * 1000);
   }
 
   bool IsFile()

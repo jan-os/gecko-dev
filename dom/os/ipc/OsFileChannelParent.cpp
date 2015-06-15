@@ -38,15 +38,15 @@ OsFileChannelParent::~OsFileChannelParent()
   AssertIsOnBackgroundThread();
 }
 
-class GetAllowedPaths : public nsRunnable {
+class GetAllowedPaths : public nsRunnable
+{
 public:
   GetAllowedPaths(const int aAppId, nsTArray<nsString>* aResult)
     : mAppId(aAppId), mResult(aResult) {}
 
   NS_IMETHOD Run() {
     MOZ_ASSERT(NS_IsMainThread());
-    
-    printf("Unknown appId, security=%d\n", Preferences::GetBool("dom.os.security.disabled"));
+
     if (Preferences::GetBool("dom.os.security.disabled")) {
       mResult->AppendElement(NS_LITERAL_STRING("/"));
       return NS_OK;
@@ -54,18 +54,18 @@ public:
 
     nsCOMPtr<nsIAppsService> appsService = do_GetService(APPS_SERVICE_CONTRACTID);
     if (!appsService) {
-      printf("No appsService...\n");
+      NS_WARNING("No apps service");
       return NS_ERROR_FAILURE;
     }
 
     nsCOMPtr<mozIApplication> app;
     nsresult rv = appsService->GetAppByLocalId(mAppId, getter_AddRefs(app));
     if (NS_FAILED(rv)) {
-      printf("GetAppByLocalId failed\n");
+      NS_WARNING("GetAppByLocalId failed");
       return rv;
     }
     if (!app) {
-      printf("Could not get app... %d\n", mAppId);
+      NS_WARNING("Could not get app");
       return NS_ERROR_FAILURE;
     }
 
@@ -129,8 +129,7 @@ OsFileChannelParent::VerifyRights(char* aPath)
     // when ENOENT we check parent directory (and up and up, etc.)
     // when something else, break and return false
     if (errno != ENOENT) {
-      printf("VerifyRights for '%s' failed with %d (%s)\n",
-             aPath, errno, strerror(errno));
+      NS_WARNING("VerifyRights failed");
       free(aPath);
       return false;
     }
@@ -175,6 +174,8 @@ OsFileChannelParent::VerifyRights(char* aPath)
 bool
 OsFileChannelParent::RecvInit(const int& aAppId)
 {
+  AssertIsOnBackgroundThread();
+
   nsCOMPtr<nsIRunnable> event = new GetAllowedPaths(aAppId, &mAllowedPaths);
   nsresult rv = NS_DispatchToMainThread(event, NS_DISPATCH_SYNC);
   mInitialized = true;
@@ -397,8 +398,8 @@ OsFileChannelParent::RecvLutimes(const nsString& aPath,
 
 bool
 OsFileChannelParent::RecvTruncate(const nsString& aPath,
-                               const int& aLength,
-                               int* aRetVal)
+                                  const int& aLength,
+                                  int* aRetVal)
 {
   AssertIsOnBackgroundThread();
 
@@ -498,6 +499,8 @@ bool
 OsFileChannelParent::RecvReaddir(const nsString& aPath,
                                  ReaddirResponse* aRetVal)
 {
+  AssertIsOnBackgroundThread();
+  
   nsTArray<nsString> files;
 
   auto path = ToNewCString(aPath);
@@ -535,6 +538,8 @@ OsFileChannelParent::RecvSymlink(const nsString& aPath1,
                                  const nsString& aPath2,
                                  int* aRetVal)
 {
+  AssertIsOnBackgroundThread();
+
   // http://pubs.opengroup.org/onlinepubs/009695399/functions/symlink.html
   // The string pointed to by path1 shall be treated only as a character
   // string and shall not be validated as a pathname.
@@ -563,6 +568,8 @@ bool
 OsFileChannelParent::RecvReadlink(const nsString& aPath,
                                  ReadlinkResponse* aRetVal)
 {
+  AssertIsOnBackgroundThread();
+  
   auto path = ToNewCString(aPath);
   if (!VerifyRights(path)) {
     *aRetVal = *(new ReadlinkResponse(NS_LITERAL_STRING(""), EACCES));
@@ -598,12 +605,6 @@ OsFileChannelParent::RecvReadlink(const nsString& aPath,
 
     buffer_size *= 2;
   }
-}
-
-void
-OsFileChannelParent::ActorDestroy(ActorDestroyReason aWhy)
-{
-  AssertIsOnBackgroundThread();
 }
 
 }

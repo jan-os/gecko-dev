@@ -14,7 +14,7 @@ interface nsIArray;
  * We expose Gecko-internal helpers related to "web apps" through this
  * sub-interface.
  */
-[scriptable, uuid(e76aa5e0-80b2-404f-bccc-1067828bb6ed)]
+[scriptable, uuid(e678dd61-cc3e-489c-b45a-4fcf1b5a8917)]
 interface mozIApplication: nsISupports
 {
   /* Return true if this app has |permission|. */

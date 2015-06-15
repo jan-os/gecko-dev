@@ -26,6 +26,7 @@ public:
 
   void SetParent(OsManager* aOsManager)
   {
+    MOZ_ASSERT(aOsManager);
     mOsManager = aOsManager;
   }
 
@@ -35,7 +36,7 @@ public:
   }
 
 private:
-  explicit OsFileChannelChild();
+  OsFileChannelChild();
   ~OsFileChannelChild();
 
   virtual void ActorDestroy(ActorDestroyReason aWhy) override;

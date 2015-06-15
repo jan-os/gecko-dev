@@ -37,14 +37,12 @@ class OsManager final : public DOMEventTargetHelper
 public:
   NS_DECL_ISUPPORTS_INHERITED
 
-  explicit OsManager(workers::WorkerGlobalScope* aScope);
+  explicit OsManager(workers::WorkerPrivate* aWorkerPrivate);
 
   void Init();
   void Shutdown();
 
   virtual JSObject* WrapObject(JSContext* aCx, JS::Handle<JSObject*> aGivenProto) override;
-
-  POsFileChannelChild* mActor;
 
   /**
    * WebIDL Interface
@@ -131,24 +129,26 @@ public:
   int IRWXG() const { return S_IRWXG; }
   int IRWXO() const { return S_IRWXO; }
 
-  void GetTEMP_DIR(nsString& aRetVal) {
+  void GetTEMP_DIR(nsString& aRetVal, ErrorResult& aRv)
+  {
     nsCOMPtr<nsIFile> tmpDir;
     nsresult rv = NS_GetSpecialDirectory(NS_OS_TEMP_DIR,
                                          getter_AddRefs(tmpDir));
     if (NS_FAILED(rv)) {
+      aRv.Throw(rv);
       return;
     }
     tmpDir->GetPath(aRetVal);
   }
 
 protected:
-  virtual ~OsManager() {
-    // ? free(mActor) ?
-  }
+  virtual ~OsManager() {}
 
 private:
   void HandleErrno(int aErr, ErrorResult& aRv);
+  POsFileChannelChild* mActor;
   workers::WorkerGlobalScope* mScope;
+  workers::WorkerPrivate* mWorkerPrivate;
 };
 
 } // namespace os

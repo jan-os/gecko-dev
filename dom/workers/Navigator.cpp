@@ -402,7 +402,8 @@ WorkerNavigator::GetOs(ErrorResult& aRv)
     WorkerPrivate* workerPrivate = GetCurrentThreadWorkerPrivate();
     MOZ_ASSERT(workerPrivate);
 
-    mOsManager = new os::OsManager(workerPrivate->GlobalScope());
+    mOsManager = new os::OsManager(workerPrivate);
+    mOsManager->Init();
   }
 
   nsRefPtr<os::OsManager> osManager = mOsManager;
