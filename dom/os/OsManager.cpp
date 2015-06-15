@@ -36,7 +36,7 @@ NS_IMPL_RELEASE_INHERITED(OsManager, DOMEventTargetHelper)
 NS_INTERFACE_MAP_BEGIN(OsManager)
 NS_INTERFACE_MAP_END_INHERITING(DOMEventTargetHelper)
 
-/** 
+/**
  * The os module consists of the OsManager (this file), which runs in a worker
  * and an IPC part (OsFileChannel), which runs in the background thread.
  * Whenever the OsManager wants to do an action against the filesystem,

@@ -533,10 +533,9 @@ OsFileChannelParent::RecvReadlink(const nsString& aPath,
   }
 
   int buffer_size = 255;
-  char* buffer = NULL;
 
   while (1) {
-    buffer = (char*)realloc(buffer, buffer_size);
+    nsAutoArrayPtr<char> buffer(new (fallible) char[buffer_size]);
     if (!buffer) {
       *aRetVal = *(new ReadlinkResponse(NS_LITERAL_STRING(""), ENOMEM));
       return true;
@@ -545,14 +544,12 @@ OsFileChannelParent::RecvReadlink(const nsString& aPath,
     int rl = readlink(path.get(), buffer, buffer_size);
     if (rl == -1) {
       *aRetVal = *(new ReadlinkResponse(NS_LITERAL_STRING(""), errno));
-      free(buffer);
       return true;
     }
 
     if (rl < buffer_size) {
       buffer[rl] = '\0';
-      *aRetVal = *(new ReadlinkResponse(NS_ConvertASCIItoUTF16(buffer), 0));
-      free(buffer);
+      *aRetVal = *(new ReadlinkResponse(NS_ConvertUTF8toUTF16(buffer), 0));
       return true;
     }
 

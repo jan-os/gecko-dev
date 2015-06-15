@@ -9,7 +9,7 @@
 namespace mozilla {
 namespace dom {
 namespace os {
-class StatWrapper final 
+class StatWrapper final
 {
 public:
   StatWrapper() {}

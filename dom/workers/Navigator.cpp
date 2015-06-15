@@ -406,8 +406,7 @@ WorkerNavigator::GetOs(ErrorResult& aRv)
     mOsManager->Init();
   }
 
-  nsRefPtr<os::OsManager> osManager = mOsManager;
-  return osManager.forget();
+  return mOsManager.forget();
 }
 
 END_WORKERS_NAMESPACE
