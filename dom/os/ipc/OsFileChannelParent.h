@@ -26,7 +26,7 @@ private:
   OsFileChannelParent();
   ~OsFileChannelParent();
 
-  bool VerifyRights(char* aPath);
+  bool VerifyRights(const nsACString& aPath);
 
   virtual bool RecvInit(const int& aAppId);
 
@@ -76,6 +76,8 @@ private:
 
   virtual bool RecvReadlink(const nsString& aPath,
                             ReadlinkResponse* aRetVal) override;
+
+  virtual void ActorDestroy(ActorDestroyReason aWhy) override;
 
   bool mInitialized = false;
   nsTArray<nsString> mAllowedPaths;
