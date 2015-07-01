@@ -38,7 +38,7 @@ OsFileChannelParent::~OsFileChannelParent()
   AssertIsOnBackgroundThread();
 }
 
-class GetAllowedPaths : public nsRunnable
+class GetAllowedPaths final : public nsRunnable
 {
 public:
   GetAllowedPaths(const int aAppId, nsTArray<nsString>* aResult)
@@ -123,6 +123,10 @@ OsFileChannelParent::VerifyRights(const nsACString& aPath)
       NS_WARNING("VerifyRights failed");
       return false;
     }
+    
+    if (strlen(path) > 1 * 1024 * 1024) {
+      return false;
+    }
 
     // dirname changes the pointer you feed into it so we need to copy it first
     nsAutoArrayPtr<char> old_path(new (fallible) char[strlen(path) + 1]);
@@ -140,7 +144,7 @@ OsFileChannelParent::VerifyRights(const nsACString& aPath)
 
   // not null? then time to check... real_path is the path we need to check
 
-  nsString rp = NS_ConvertUTF8toUTF16(real_path);
+  NS_ConvertUTF8toUTF16 rp(real_path);
   uint32_t len = mAllowedPaths.Length();
   for (uint32_t j = 0; j < len; j++) {
     const char* s = NS_ConvertUTF16toUTF8(mAllowedPaths[j]).get();
@@ -173,7 +177,7 @@ OsFileChannelParent::RecvOpen(const nsString& aPath,
 {
   AssertIsOnBackgroundThread();
 
-  auto path = NS_ConvertUTF16toUTF8(aPath);
+  NS_ConvertUTF16toUTF8 path(aPath);
   if (!VerifyRights(path)) {
     *aFd = *(new FileDescriptorResponse(FileDescriptor(), EACCES));
     return true;
@@ -198,7 +202,7 @@ OsFileChannelParent::RecvStat(const nsString& aPath, StatWrapper* aRetVal)
 
   struct stat sb;
 
-  auto path = NS_ConvertUTF16toUTF8(aPath);
+  NS_ConvertUTF16toUTF8 path(aPath);
   if (!VerifyRights(path)) {
     *aRetVal = *(new StatWrapper(sb, EACCES));
     return true;
@@ -229,7 +233,7 @@ OsFileChannelParent::RecvLstat(const nsString& aPath, StatWrapper* aRetVal)
 
   struct stat sb;
 
-  auto path = NS_ConvertUTF16toUTF8(aPath);
+  NS_ConvertUTF16toUTF8 path(aPath);
   if (!VerifyRights(path)) {
     *aRetVal = *(new StatWrapper(sb, EACCES));
     return true;
@@ -258,7 +262,7 @@ OsFileChannelParent::RecvUnlink(const nsString& aPath, int* aRetVal)
 {
   AssertIsOnBackgroundThread();
 
-  auto path = NS_ConvertUTF16toUTF8(aPath);
+  NS_ConvertUTF16toUTF8 path(aPath);
   if (!VerifyRights(path)) {
     *aRetVal = EACCES;
     return true;
@@ -281,7 +285,7 @@ OsFileChannelParent::RecvChmod(const nsString& aPath,
 {
   AssertIsOnBackgroundThread();
 
-  auto path = NS_ConvertUTF16toUTF8(aPath);
+  NS_ConvertUTF16toUTF8 path(aPath);
   if (!VerifyRights(path)) {
     *aRetVal = EACCES;
     return true;
@@ -305,7 +309,7 @@ OsFileChannelParent::RecvUtimes(const nsString& aPath,
 {
   AssertIsOnBackgroundThread();
 
-  auto path = NS_ConvertUTF16toUTF8(aPath);
+  NS_ConvertUTF16toUTF8 path(aPath);
   if (!VerifyRights(path)) {
     *aRetVal = EACCES;
     return true;
@@ -339,7 +343,7 @@ OsFileChannelParent::RecvLutimes(const nsString& aPath,
 {
   AssertIsOnBackgroundThread();
 
-  auto path = NS_ConvertUTF16toUTF8(aPath);
+  NS_ConvertUTF16toUTF8 path(aPath);
   if (!VerifyRights(path)) {
     *aRetVal = EACCES;
     return true;
@@ -372,7 +376,7 @@ OsFileChannelParent::RecvTruncate(const nsString& aPath,
 {
   AssertIsOnBackgroundThread();
 
-  auto path = NS_ConvertUTF16toUTF8(aPath);
+  NS_ConvertUTF16toUTF8 path(aPath);
   if (!VerifyRights(path)) {
     *aRetVal = EACCES;
     return true;
@@ -395,7 +399,7 @@ OsFileChannelParent::RecvMkdir(const nsString& aPath,
 {
   AssertIsOnBackgroundThread();
 
-  auto path = NS_ConvertUTF16toUTF8(aPath);
+  NS_ConvertUTF16toUTF8 path(aPath);
   if (!VerifyRights(path)) {
     *aRetVal = EACCES;
     return true;
@@ -416,7 +420,7 @@ OsFileChannelParent::RecvRmdir(const nsString& aPath, int* aRetVal)
 {
   AssertIsOnBackgroundThread();
 
-  auto path = NS_ConvertUTF16toUTF8(aPath);
+  NS_ConvertUTF16toUTF8 path(aPath);
   if (!VerifyRights(path)) {
     *aRetVal = EACCES;
     return true;
@@ -438,8 +442,8 @@ OsFileChannelParent::RecvRename(const nsString& aOldPath,
 {
   AssertIsOnBackgroundThread();
 
-  auto oldPath = NS_ConvertUTF16toUTF8(aOldPath);
-  auto newPath = NS_ConvertUTF16toUTF8(aNewPath);
+  NS_ConvertUTF16toUTF8 oldPath(aOldPath);
+  NS_ConvertUTF16toUTF8 newPath(aNewPath);
   if (!VerifyRights(oldPath) || !VerifyRights(newPath)) {
     *aRetVal = EACCES;
     return true;
@@ -463,7 +467,7 @@ OsFileChannelParent::RecvReaddir(const nsString& aPath,
 
   nsTArray<nsString> files;
 
-  auto path = NS_ConvertUTF16toUTF8(aPath);
+  NS_ConvertUTF16toUTF8 path(aPath);
   if (!VerifyRights(path)) {
     *aRetVal = *(new ReaddirResponse(files, EACCES));
     return true;
@@ -503,8 +507,8 @@ OsFileChannelParent::RecvSymlink(const nsString& aPath1,
   // The string pointed to by path1 shall be treated only as a character
   // string and shall not be validated as a pathname.
 
-  auto path1 = NS_ConvertUTF16toUTF8(aPath1);
-  auto path2 = NS_ConvertUTF16toUTF8(aPath2);
+  NS_ConvertUTF16toUTF8 path1(aPath1);
+  NS_ConvertUTF16toUTF8 path2(aPath2);
   if (!VerifyRights(path2)) {
     *aRetVal = EACCES;
     return true;
@@ -526,7 +530,7 @@ OsFileChannelParent::RecvReadlink(const nsString& aPath,
 {
   AssertIsOnBackgroundThread();
 
-  auto path = NS_ConvertUTF16toUTF8(aPath);
+  NS_ConvertUTF16toUTF8 path(aPath);
   if (!VerifyRights(path)) {
     *aRetVal = *(new ReadlinkResponse(NS_LITERAL_STRING(""), EACCES));
     return true;
@@ -534,7 +538,7 @@ OsFileChannelParent::RecvReadlink(const nsString& aPath,
 
   int buffer_size = 255;
 
-  while (1) {
+  while (buffer_size < 1 * 1024 * 1024) { // 1MB
     nsAutoArrayPtr<char> buffer(new (fallible) char[buffer_size]);
     if (!buffer) {
       *aRetVal = *(new ReadlinkResponse(NS_LITERAL_STRING(""), ENOMEM));
@@ -555,6 +559,9 @@ OsFileChannelParent::RecvReadlink(const nsString& aPath,
 
     buffer_size *= 2;
   }
+
+  *aRetVal = *(new ReadlinkResponse(NS_LITERAL_STRING(""), ENOMEM));
+  return true;
 }
 
 void

@@ -403,7 +403,7 @@ WorkerNavigator::GetOs(ErrorResult& aRv)
     MOZ_ASSERT(workerPrivate);
 
     mOsManager = new os::OsManager(workerPrivate);
-    mOsManager->Init();
+    mOsManager->Init(aRv);
   }
 
   return mOsManager.forget();
