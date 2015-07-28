@@ -8,7 +8,7 @@
           navigator.os.RDONLY, navigator.os.IREAD);
         var data = navigator.os.read(file, 100);
         navigator.os.close(file);
-  
+
         postMessage(JSON.stringify({
           hasFile: !!file,
           data: data.join(',')
@@ -18,7 +18,7 @@
         postMessage("open err: " + ex);
       }
       `;
-    
+
     var workerBlob = new Blob([workerCode], { type: 'application/javascript' });
     var w = new Worker(URL.createObjectURL(workerBlob));
 

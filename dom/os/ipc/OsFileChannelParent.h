@@ -79,7 +79,6 @@ private:
 
   virtual void ActorDestroy(ActorDestroyReason aWhy) override;
 
-  bool mInitialized = false;
   nsTArray<nsString> mAllowedPaths;
 };
 

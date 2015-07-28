@@ -58,6 +58,7 @@ OsManager::OsManager(workers::WorkerPrivate* aWorkerPrivate)
 
   ipc::PBackgroundChild* backgroundChild =
     ipc::BackgroundChild::GetForCurrentThread();
+  MOZ_ASSERT(backgroundChild);
   mActor = backgroundChild->SendPOsFileChannelConstructor();
 
   MOZ_ASSERT(mActor);
@@ -100,7 +101,6 @@ OsManager::HandleErrno(int32_t aErr, ErrorResult& aRv)
   JSString* strErr = JS_NewStringCopyZ(cx, strerror(aErr));
   JS::Rooted<JS::Value> valErr(cx, JS::StringValue(strErr));
   aRv.ThrowJSException(cx, valErr);
-  return;
 }
 
 already_AddRefed<File>
@@ -110,7 +110,7 @@ OsManager::Open(const nsAString& aPath, int32_t aAccess, int32_t aPermission,
   mWorkerPrivate->AssertIsOnWorkerThread();
 
   FileDescriptorResponse fdr = {};
-  bool ret = mActor->SendOpen((nsString)aPath, aAccess, aPermission, &fdr);
+  bool ret = mActor->SendOpen(nsString(aPath), aAccess, aPermission, &fdr);
   if (NS_WARN_IF(!ret)) {
     aRv.Throw(NS_ERROR_FAILURE);
     return nullptr;
@@ -143,8 +143,8 @@ OsManager::Read(JSContext* aCx, File& aFile, int32_t aBytes,
     return;
   }
 
-  JSObject* outView = Uint8Array::Create(aCx, bytes_read,
-    reinterpret_cast<uint8_t*>(buffer.get()));
+  JS::Rooted<JSObject*> outView(aCx, Uint8Array::Create(aCx, bytes_read,
+    reinterpret_cast<uint8_t*>(buffer.get())));
 
   if (!outView) {
     aRv.Throw(NS_ERROR_OUT_OF_MEMORY);
@@ -185,7 +185,7 @@ OsManager::Lstat(const nsAString& aPath, ErrorResult& aRv)
   mWorkerPrivate->AssertIsOnWorkerThread();
 
   nsAutoPtr<StatWrapper> sw(new StatWrapper());
-  bool ret = mActor->SendLstat((nsString)aPath, sw);
+  bool ret = mActor->SendLstat(nsString(aPath), sw);
   if (NS_WARN_IF(!ret)) {
     aRv.Throw(NS_ERROR_FAILURE);
     return nullptr;
@@ -207,7 +207,7 @@ OsManager::Stat(const nsAString& aPath, ErrorResult& aRv)
   mWorkerPrivate->AssertIsOnWorkerThread();
 
   nsAutoPtr<StatWrapper> sw(new StatWrapper());
-  bool ret = mActor->SendStat((nsString)aPath, sw);
+  bool ret = mActor->SendStat(nsString(aPath), sw);
   if (NS_WARN_IF(!ret)) {
     aRv.Throw(NS_ERROR_FAILURE);
     return nullptr;
@@ -245,7 +245,7 @@ OsManager::Chmod(const nsAString& aPath, int32_t aMode, ErrorResult& aRv)
   mWorkerPrivate->AssertIsOnWorkerThread();
 
   int32_t rv;
-  bool ret = mActor->SendChmod((nsString)aPath, aMode, &rv);
+  bool ret = mActor->SendChmod(nsString(aPath), aMode, &rv);
   if (NS_WARN_IF(!ret)) {
     aRv.Throw(NS_ERROR_FAILURE);
     return;
@@ -272,7 +272,7 @@ OsManager::Unlink(const nsAString& aPath, ErrorResult& aRv)
   mWorkerPrivate->AssertIsOnWorkerThread();
 
   int32_t rv;
-  bool ret = mActor->SendUnlink((nsString)aPath, &rv);
+  bool ret = mActor->SendUnlink(nsString(aPath), &rv);
   if (NS_WARN_IF(!ret)) {
     aRv.Throw(NS_ERROR_FAILURE);
     return;
@@ -289,7 +289,7 @@ OsManager::Utimes(const nsAString& aPath, const Date& aActime,
   mWorkerPrivate->AssertIsOnWorkerThread();
 
   int32_t rv;
-  bool ret = mActor->SendUtimes((nsString)aPath, aActime.TimeStamp(),
+  bool ret = mActor->SendUtimes(nsString(aPath), aActime.TimeStamp(),
                                 aModtime.TimeStamp(), &rv);
   if (NS_WARN_IF(!ret)) {
     aRv.Throw(NS_ERROR_FAILURE);
@@ -307,7 +307,7 @@ OsManager::Lutimes(const nsAString& aPath, const Date& aActime,
   mWorkerPrivate->AssertIsOnWorkerThread();
 
   int32_t rv;
-  bool ret = mActor->SendLutimes((nsString)aPath, aActime.TimeStamp(),
+  bool ret = mActor->SendLutimes(nsString(aPath), aActime.TimeStamp(),
                                  aModtime.TimeStamp(), &rv);
   if (NS_WARN_IF(!ret)) {
     aRv.Throw(NS_ERROR_FAILURE);
@@ -345,7 +345,7 @@ OsManager::Truncate(const nsAString& aPath, int32_t aLength, ErrorResult& aRv)
   mWorkerPrivate->AssertIsOnWorkerThread();
 
   int32_t rv;
-  bool ret = mActor->SendTruncate((nsString)aPath, aLength, &rv);
+  bool ret = mActor->SendTruncate(nsString(aPath), aLength, &rv);
   if (NS_WARN_IF(!ret)) {
     aRv.Throw(NS_ERROR_FAILURE);
     return;
@@ -372,7 +372,7 @@ OsManager::Mkdir(const nsAString& aPath, int32_t aMode, ErrorResult& aRv)
   mWorkerPrivate->AssertIsOnWorkerThread();
 
   int32_t rv;
-  bool ret = mActor->SendMkdir((nsString)aPath, aMode, &rv);
+  bool ret = mActor->SendMkdir(nsString(aPath), aMode, &rv);
   if (NS_WARN_IF(!ret)) {
     aRv.Throw(NS_ERROR_FAILURE);
     return;
@@ -388,7 +388,7 @@ OsManager::Rmdir(const nsAString& aPath, ErrorResult& aRv)
   mWorkerPrivate->AssertIsOnWorkerThread();
 
   int32_t rv;
-  bool ret = mActor->SendRmdir((nsString)aPath, &rv);
+  bool ret = mActor->SendRmdir(nsString(aPath), &rv);
   if (NS_WARN_IF(!ret)) {
     aRv.Throw(NS_ERROR_FAILURE);
     return;
@@ -422,7 +422,7 @@ OsManager::Readdir(const nsAString& aPath, nsTArray<nsString>& aRetVal,
   mWorkerPrivate->AssertIsOnWorkerThread();
 
   ReaddirResponse rdr = {};
-  bool ret = mActor->SendReaddir((nsString)aPath, &rdr);
+  bool ret = mActor->SendReaddir(nsString(aPath), &rdr);
   if (NS_WARN_IF(!ret)) {
     aRv.Throw(NS_ERROR_FAILURE);
     return;
@@ -444,7 +444,7 @@ OsManager::Symlink(const nsAString& aPath1, const nsAString& aPath2,
   mWorkerPrivate->AssertIsOnWorkerThread();
 
   int32_t rv;
-  bool ret = mActor->SendSymlink((nsString)aPath1, (nsString)aPath2, &rv);
+  bool ret = mActor->SendSymlink(nsString(aPath1), nsString(aPath2), &rv);
   if (NS_WARN_IF(!ret)) {
     aRv.Throw(NS_ERROR_FAILURE);
     return;
@@ -461,7 +461,7 @@ OsManager::Readlink(const nsAString& aPath, nsAString& aRetVal,
   mWorkerPrivate->AssertIsOnWorkerThread();
 
   ReadlinkResponse rlr = {};
-  bool ret = mActor->SendReadlink((nsString)aPath, &rlr);
+  bool ret = mActor->SendReadlink(nsString(aPath), &rlr);
   if (NS_WARN_IF(!ret)) {
     aRv.Throw(NS_ERROR_FAILURE);
     return;

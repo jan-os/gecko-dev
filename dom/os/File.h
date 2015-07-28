@@ -23,7 +23,9 @@ public:
   File(OsManager* aParent, int aFd)
     : mParent(aParent)
     , mFd(aFd)
-  {}
+  {
+    MOZ_ASSERT(aParent);
+  }
 
   NS_INLINE_DECL_CYCLE_COLLECTING_NATIVE_REFCOUNTING(File)
   NS_DECL_CYCLE_COLLECTION_SCRIPT_HOLDER_NATIVE_CLASS(File)

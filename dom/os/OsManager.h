@@ -30,7 +30,8 @@ namespace os {
 
 using mozilla::dom::Date;
 
-typedef void (*PermissionsCallback)(OsManager* aOsManager, const nsTArray<nsString>& aResult);
+typedef void (*PermissionsCallback)(OsManager* aOsManager,
+                                    const nsTArray<nsString>& aResult);
 
 class OsManager final : public DOMEventTargetHelper
 {
@@ -42,7 +43,8 @@ public:
   void Init(ErrorResult& aRv);
   void Shutdown();
 
-  virtual JSObject* WrapObject(JSContext* aCx, JS::Handle<JSObject*> aGivenProto) override;
+  virtual JSObject* WrapObject(JSContext* aCx,
+                               JS::Handle<JSObject*> aGivenProto) override;
 
   /**
    * WebIDL Interface

@@ -41,14 +41,15 @@ OsFileChannelParent::~OsFileChannelParent()
 class GetAllowedPaths final : public nsRunnable
 {
 public:
-  GetAllowedPaths(const int aAppId, nsTArray<nsString>* aResult)
+  GetAllowedPaths(const int aAppId, nsTArray<nsString>& aResult)
     : mAppId(aAppId), mResult(aResult) {}
 
-  NS_IMETHOD Run() {
+  NS_IMETHOD Run() override
+  {
     MOZ_ASSERT(NS_IsMainThread());
 
     if (Preferences::GetBool("dom.os.security.disabled")) {
-      mResult->AppendElement(NS_LITERAL_STRING("/"));
+      mResult.AppendElement(NS_LITERAL_STRING("/"));
       return NS_OK;
     }
 
@@ -73,7 +74,10 @@ public:
     app->GetOsPaths(getter_AddRefs(osPaths));
 
     uint32_t length;
-    osPaths->GetLength(&length);
+    rv = osPaths->GetLength(&length);
+    if (NS_WARN_IF(NS_FAILED(rv))) {
+      return rv;
+    }
 
     for (uint32_t j = 0; j < length; ++j) {
       nsCOMPtr<nsISupportsString> iss = do_QueryElementAt(osPaths, j);
@@ -81,22 +85,29 @@ public:
         return NS_ERROR_FAILURE;
 
       nsAutoString path;
-      iss->GetData(path);
+      rv = iss->GetData(path);
+      if (NS_WARN_IF(NS_FAILED(rv))) {
+        return rv;
+      }
 
-      if (path.Equals(NS_LITERAL_STRING("TEMPDIR"))) {
-        nsString tmpDirPath;
-        nsCOMPtr<nsIFile> tmpDir;
-        nsresult rv = NS_GetSpecialDirectory(NS_OS_TEMP_DIR,
-                                            getter_AddRefs(tmpDir));
-        if (NS_FAILED(rv)) {
-          continue;
-        }
-        tmpDir->GetPath(tmpDirPath);
-        mResult->AppendElement(tmpDirPath);
+      if (!path.Equals(NS_LITERAL_STRING("TEMPDIR"))) {
+        mResult.AppendElement(path);
+        continue;
       }
-      else {
-        mResult->AppendElement(path);
+
+      // TEMPDIR resolving to real temp path
+      nsAutoString tmpDirPath;
+      nsCOMPtr<nsIFile> tmpDir;
+      rv = NS_GetSpecialDirectory(NS_OS_TEMP_DIR,
+                                  getter_AddRefs(tmpDir));
+      if (NS_WARN_IF(NS_FAILED(rv))) {
+        continue;
       }
+      rv = tmpDir->GetPath(tmpDirPath);
+      if (NS_WARN_IF(NS_FAILED(rv))) {
+        continue;
+      }
+      mResult.AppendElement(tmpDirPath);
     }
 
     return NS_OK;
@@ -104,7 +115,7 @@ public:
 
 private:
   const int mAppId;
-  nsTArray<nsString>* mResult;
+  nsTArray<nsString>& mResult;
 };
 
 bool
@@ -121,23 +132,28 @@ OsFileChannelParent::VerifyRights(const nsACString& aPath)
     // when something else, break and return false
     if (errno != ENOENT) {
       NS_WARNING("VerifyRights failed");
+      free(path);
       return false;
     }
-    
-    if (strlen(path) > 1 * 1024 * 1024) {
+
+    if (strlen(path) > 1024 * 1024) { // 1MB
+      free(path);
       return false;
     }
 
     // dirname changes the pointer you feed into it so we need to copy it first
     nsAutoArrayPtr<char> old_path(new (fallible) char[strlen(path) + 1]);
     if (!old_path) {
-      return false; //@todo: NS_ERROR_OUT_OF_MEMORY
+      NS_WARNING("Out of memory");
+      free(path);
+      return false;
     }
     strcpy(old_path, path);
 
     path = dirname(path);
 
     if (strcmp(path, old_path) == 0) { // ended at invalid root point
+      free(path);
       return false;
     }
   }
@@ -147,8 +163,8 @@ OsFileChannelParent::VerifyRights(const nsACString& aPath)
   NS_ConvertUTF8toUTF16 rp(real_path);
   uint32_t len = mAllowedPaths.Length();
   for (uint32_t j = 0; j < len; j++) {
-    const char* s = NS_ConvertUTF16toUTF8(mAllowedPaths[j]).get();
-    int res = rp.Find(s, false, 0, -1);
+    NS_ConvertUTF16toUTF8 allowedPath(mAllowedPaths[j]);
+    int res = rp.Find(allowedPath.BeginReading(), false, 0, -1);
     if (res == 0) {
       return true;
     }
@@ -162,11 +178,13 @@ OsFileChannelParent::RecvInit(const int& aAppId)
 {
   AssertIsOnBackgroundThread();
 
-  nsCOMPtr<nsIRunnable> event = new GetAllowedPaths(aAppId, &mAllowedPaths);
+  nsCOMPtr<nsIRunnable> event = new GetAllowedPaths(aAppId, mAllowedPaths);
   nsresult rv = NS_DispatchToMainThread(event, NS_DISPATCH_SYNC);
-  mInitialized = true;
+  if (NS_WARN_IF(NS_FAILED(rv))) {
+    return false;
+  }
 
-  return NS_SUCCEEDED(rv);
+  return true;
 }
 
 bool
@@ -186,8 +204,7 @@ OsFileChannelParent::RecvOpen(const nsString& aPath,
   int fd;
   if (aPermission == 0) { // @todo make method overload?
     fd = open(path.get(), aAccess);
-  }
-  else {
+  } else {
     fd = open(path.get(), aAccess, aPermission);
   }
   *aFd = *(new FileDescriptorResponse(FileDescriptor(fd), fd == -1 ? errno : 0));
@@ -270,8 +287,7 @@ OsFileChannelParent::RecvUnlink(const nsString& aPath, int* aRetVal)
 
   if (unlink(path.get()) == -1) {
     *aRetVal = errno;
-  }
-  else {
+  } else {
     *aRetVal = 0;
   }
 
@@ -293,8 +309,7 @@ OsFileChannelParent::RecvChmod(const nsString& aPath,
 
   if (chmod(path.get(), aPermission) == -1) {
     *aRetVal = errno;
-  }
-  else {
+  } else {
     *aRetVal = 0;
   }
 
@@ -327,8 +342,7 @@ OsFileChannelParent::RecvUtimes(const nsString& aPath,
 
   if (utimes(path.get(), tv) == -1) {
     *aRetVal = errno;
-  }
-  else {
+  } else {
     *aRetVal = 0;
   }
 
@@ -361,8 +375,7 @@ OsFileChannelParent::RecvLutimes(const nsString& aPath,
 
   if (lutimes(path.get(), tv) == -1) {
     *aRetVal = errno;
-  }
-  else {
+  } else {
     *aRetVal = 0;
   }
 
@@ -384,8 +397,7 @@ OsFileChannelParent::RecvTruncate(const nsString& aPath,
 
   if (truncate(path.get(), aLength) == -1) {
     *aRetVal = errno;
-  }
-  else {
+  } else {
     *aRetVal = 0;
   }
 
@@ -407,8 +419,7 @@ OsFileChannelParent::RecvMkdir(const nsString& aPath,
 
   if (mkdir(path.get(), aMode) == -1) {
     *aRetVal = errno;
-  }
-  else {
+  } else {
     *aRetVal = 0;
   }
 
@@ -428,8 +439,7 @@ OsFileChannelParent::RecvRmdir(const nsString& aPath, int* aRetVal)
 
   if (rmdir(path.get()) == -1) {
     *aRetVal = errno;
-  }
-  else {
+  } else {
     *aRetVal = 0;
   }
 
@@ -451,8 +461,7 @@ OsFileChannelParent::RecvRename(const nsString& aOldPath,
 
   if (rename(oldPath.get(), newPath.get()) == -1) {
     *aRetVal = errno;
-  }
-  else {
+  } else {
     *aRetVal = 0;
   }
 
@@ -516,8 +525,7 @@ OsFileChannelParent::RecvSymlink(const nsString& aPath1,
 
   if (symlink(path1.get(), path2.get()) == -1) {
     *aRetVal = errno;
-  }
-  else {
+  } else {
     *aRetVal = 0;
   }
 
@@ -538,7 +546,7 @@ OsFileChannelParent::RecvReadlink(const nsString& aPath,
 
   int buffer_size = 255;
 
-  while (buffer_size < 1 * 1024 * 1024) { // 1MB
+  while (buffer_size < 1024 * 1024) { // 1MB
     nsAutoArrayPtr<char> buffer(new (fallible) char[buffer_size]);
     if (!buffer) {
       *aRetVal = *(new ReadlinkResponse(NS_LITERAL_STRING(""), ENOMEM));

@@ -7,8 +7,8 @@
 
 #include "domstubs.idl"
 
-interface nsIPrincipal;
 interface nsIArray;
+interface nsIPrincipal;
 
 /**
  * We expose Gecko-internal helpers related to "web apps" through this
