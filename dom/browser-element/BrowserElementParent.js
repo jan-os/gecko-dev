@@ -24,7 +24,7 @@ XPCOMUtils.defineLazyGetter(this, "DOMApplicationRegistry", function () {
 });
 
 function debug(msg) {
-  //dump("BrowserElementParent - " + msg + "\n");
+  dump("BrowserElementParent - " + msg + "\n");
 }
 
 function getIntPref(prefName, def) {
@@ -145,10 +145,13 @@ BrowserElementParent.prototype = {
     // any messages that it needs.
     let appManifestURL =
           this._frameElement.QueryInterface(Ci.nsIMozBrowserFrame).appManifestURL;
+    debug('_registerAppManifest "' + appManifestURL + '"');
+    let inParent = Cc["@mozilla.org/xre/app-info;1"]
+                     .getService(Ci.nsIXULRuntime)
+                     .processType == Ci.nsIXULRuntime.PROCESS_TYPE_DEFAULT;
+    debug('inParent? ' + inParent);
+
     if (appManifestURL) {
-      let inParent = Cc["@mozilla.org/xre/app-info;1"]
-                       .getService(Ci.nsIXULRuntime)
-                       .processType == Ci.nsIXULRuntime.PROCESS_TYPE_DEFAULT;
       if (inParent) {
         DOMApplicationRegistry.registerBrowserElementParentForApp(
           { manifestURL: appManifestURL }, this._mm);
@@ -729,7 +732,7 @@ BrowserElementParent.prototype = {
     if (!this._isAlive()) {
       return null;
     }
-    
+
     let uri = Services.io.newURI(_url, null, null);
     let url = uri.QueryInterface(Ci.nsIURL);
 
@@ -819,7 +822,7 @@ BrowserElementParent.prototype = {
                                              Ci.nsIRequestObserver])
     };
 
-    // If we have a URI we'll use it to get the triggering principal to use, 
+    // If we have a URI we'll use it to get the triggering principal to use,
     // if not available a null principal is acceptable.
     let referrer = null;
     let principal = null;
@@ -834,18 +837,18 @@ BrowserElementParent.prototype = {
       // This simply returns null if there is no principal available
       // for the requested uri. This is an acceptable fallback when
       // calling newChannelFromURI2.
-      principal = 
+      principal =
         Services.scriptSecurityManager.getAppCodebasePrincipal(
-          referrer, 
-          this._frameLoader.loadContext.appId, 
+          referrer,
+          this._frameLoader.loadContext.appId,
           this._frameLoader.loadContext.isInBrowserElement);
     }
 
     debug('Using principal? ' + !!principal);
 
-    let channel = 
+    let channel =
       Services.io.newChannelFromURI2(url,
-                                     null,       // No document. 
+                                     null,       // No document.
                                      principal,  // Loading principal
                                      principal,  // Triggering principal
                                      Ci.nsILoadInfo.SEC_NORMAL,
@@ -866,7 +869,7 @@ BrowserElementParent.prototype = {
     channel.loadFlags |= flags;
 
     if (channel instanceof Ci.nsIHttpChannel) {
-      debug('Setting HTTP referrer = ' + (referrer && referrer.spec)); 
+      debug('Setting HTTP referrer = ' + (referrer && referrer.spec));
       channel.referrer = referrer;
       if (channel instanceof Ci.nsIHttpChannelInternal) {
         channel.forceAllowThirdPartyCookie = true;

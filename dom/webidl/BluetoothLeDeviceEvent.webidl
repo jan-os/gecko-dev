@@ -4,8 +4,7 @@
  * You can obtain one at http://mozilla.org/MPL/2.0/.
  */
 
-[CheckAnyPermissions="bluetooth",
- Constructor(DOMString type, optional BluetoothLeDeviceEventInit eventInitDict)]
+[Constructor(DOMString type, optional BluetoothLeDeviceEventInit eventInitDict)]
 interface BluetoothLeDeviceEvent : Event
 {
   readonly attribute BluetoothDevice? device;

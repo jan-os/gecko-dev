@@ -5,7 +5,7 @@
 "use strict";
 
 function debug(aMsg) {
-  //dump("-*- PermissionSettings.js: " + aMsg + "\n");
+  dump("-*- PermissionSettings.js: " + aMsg + "\n");
 }
 
 const Cc = Components.classes;

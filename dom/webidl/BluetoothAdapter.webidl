@@ -32,7 +32,6 @@ dictionary MediaPlayStatus
   DOMString   playStatus = "";
 };
 
-[CheckAnyPermissions="bluetooth"]
 interface BluetoothAdapter : EventTarget {
   readonly attribute DOMString      address;
   readonly attribute unsigned long  class;

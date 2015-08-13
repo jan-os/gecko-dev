@@ -20,7 +20,7 @@ XPCOMUtils.defineLazyServiceGetter(this, "acs",
 let kLongestReturnedString = 128;
 
 function debug(msg) {
-  //dump("BrowserElementChildPreload - " + msg + "\n");
+  dump("BrowserElementChildPreload - " + msg + "\n");
 }
 
 function sendAsyncMsg(msg, data) {

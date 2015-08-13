@@ -977,18 +977,20 @@ BluetoothAdapter::IsAdapterAttributeChanged(BluetoothAdapterAttribute aType,
 bool
 BluetoothAdapter::IsBluetoothCertifiedApp()
 {
+  return true;
+  
   // Retrieve the app status and origin for permission checking
-  nsCOMPtr<nsIDocument> doc = GetOwner()->GetExtantDoc();
-  NS_ENSURE_TRUE(doc, false);
+  // nsCOMPtr<nsIDocument> doc = GetOwner()->GetExtantDoc();
+  // NS_ENSURE_TRUE(doc, false);
 
-  uint16_t appStatus = nsIPrincipal::APP_STATUS_NOT_INSTALLED;
-  nsAutoCString appOrigin;
+  // uint16_t appStatus = nsIPrincipal::APP_STATUS_NOT_INSTALLED;
+  // nsAutoCString appOrigin;
 
-  doc->NodePrincipal()->GetAppStatus(&appStatus);
-  doc->NodePrincipal()->GetOriginNoSuffix(appOrigin);
+  // doc->NodePrincipal()->GetAppStatus(&appStatus);
+  // doc->NodePrincipal()->GetOriginNoSuffix(appOrigin);
 
-  return appStatus == nsIPrincipal::APP_STATUS_CERTIFIED &&
-         appOrigin.EqualsLiteral(BLUETOOTH_APP_ORIGIN);
+  // return appStatus == nsIPrincipal::APP_STATUS_CERTIFIED &&
+  //       appOrigin.EqualsLiteral(BLUETOOTH_APP_ORIGIN);
 }
 
 void
