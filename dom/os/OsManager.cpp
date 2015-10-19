@@ -56,8 +56,8 @@ OsManager::OsManager(workers::WorkerPrivate* aWorkerPrivate)
   MOZ_ASSERT(aWorkerPrivate);
   aWorkerPrivate->AssertIsOnWorkerThread();
 
-  ipc::PBackgroundChild* backgroundChild =
-    ipc::BackgroundChild::GetForCurrentThread();
+  ::mozilla::ipc::PBackgroundChild* backgroundChild =
+    ::mozilla::ipc::BackgroundChild::GetForCurrentThread();
   MOZ_ASSERT(backgroundChild);
   mActor = backgroundChild->SendPOsFileChannelConstructor();
 
@@ -289,8 +289,9 @@ OsManager::Utimes(const nsAString& aPath, const Date& aActime,
   mWorkerPrivate->AssertIsOnWorkerThread();
 
   int32_t rv;
-  bool ret = mActor->SendUtimes(nsString(aPath), aActime.TimeStamp(),
-                                aModtime.TimeStamp(), &rv);
+  bool ret = mActor->SendUtimes(nsString(aPath),
+                                aActime.TimeStamp().toDouble(),
+                                aModtime.TimeStamp().toDouble(), &rv);
   if (NS_WARN_IF(!ret)) {
     aRv.Throw(NS_ERROR_FAILURE);
     return;
@@ -307,8 +308,9 @@ OsManager::Lutimes(const nsAString& aPath, const Date& aActime,
   mWorkerPrivate->AssertIsOnWorkerThread();
 
   int32_t rv;
-  bool ret = mActor->SendLutimes(nsString(aPath), aActime.TimeStamp(),
-                                 aModtime.TimeStamp(), &rv);
+  bool ret = mActor->SendLutimes(nsString(aPath),
+                                 aActime.TimeStamp().toDouble(),
+                                 aModtime.TimeStamp().toDouble(), &rv);
   if (NS_WARN_IF(!ret)) {
     aRv.Throw(NS_ERROR_FAILURE);
     return;
@@ -326,12 +328,14 @@ OsManager::Futimes(File& aFile, const Date& aActime,
 
   struct timeval tv[2];
   tv[0] = {
-    .tv_sec = ((time_t)floor(aActime.TimeStamp())) / 1000,
-    .tv_usec = (suseconds_t)(((long)floor(aActime.TimeStamp())) % 1000) * 1000
+    .tv_sec = ((time_t)floor(aActime.TimeStamp().toDouble())) / 1000,
+    .tv_usec = (suseconds_t)(
+      ((long)floor(aActime.TimeStamp().toDouble())) % 1000) * 1000
   };
   tv[1] = {
-    .tv_sec = ((time_t)floor(aModtime.TimeStamp())) / 1000,
-    .tv_usec = (suseconds_t)(((long)floor(aModtime.TimeStamp())) % 1000) * 1000
+    .tv_sec = ((time_t)floor(aModtime.TimeStamp().toDouble())) / 1000,
+    .tv_usec = (suseconds_t)(
+      ((long)floor(aModtime.TimeStamp().toDouble())) % 1000) * 1000
   };
   int32_t fr = futimes(aFile.GetFd(), tv);
   if (fr == -1) {

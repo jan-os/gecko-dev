@@ -10,7 +10,7 @@ EXPORTS.mozilla.dom.os += [
     'StatSerializer.h',
 ]
 
-SOURCES += [
+UNIFIED_SOURCES += [
     'OsFileChannelChild.cpp',
     'OsFileChannelParent.cpp',
 ]
@@ -23,8 +23,6 @@ LOCAL_INCLUDES += [
 IPDL_SOURCES += [
     'POsFileChannel.ipdl',
 ]
-
-FAIL_ON_WARNINGS = True
 
 include('/ipc/chromium/chromium-config.mozbuild')
 

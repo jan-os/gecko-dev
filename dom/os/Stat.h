@@ -94,17 +94,17 @@ public:
 
   Date Atime() const
   {
-    return Date(static_cast<double>(mStat.st_atime) * 1000);
+    return Date(JS::TimeClip(static_cast<double>(mStat.st_atime) * 1000));
   }
 
   Date Mtime() const
   {
-    return Date(static_cast<double>(mStat.st_mtime) * 1000);
+    return Date(JS::TimeClip(static_cast<double>(mStat.st_mtime) * 1000));
   }
 
   Date Ctime() const
   {
-    return Date(static_cast<double>(mStat.st_ctime) * 1000);
+    return Date(JS::TimeClip(static_cast<double>(mStat.st_ctime) * 1000));
   }
 
   bool IsFile()
