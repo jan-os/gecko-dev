@@ -75,6 +75,7 @@ public:
 
     uint32_t length;
     rv = osPaths->GetLength(&length);
+
     if (NS_WARN_IF(NS_FAILED(rv))) {
       return rv;
     }
@@ -140,6 +141,7 @@ OsFileChannelParent::VerifyRights(const nsACString& aPath)
 {
   // use path while calling dirname
   char* path = strdup(PromiseFlatCString(aPath).get());
+
   // free path when we exit early
   AutoFreePath freePath(path);
 
@@ -372,6 +374,10 @@ OsFileChannelParent::RecvLutimes(const nsString& aPath,
 {
   AssertIsOnBackgroundThread();
 
+  // no lutimes on b2g, disable for now
+#ifdef MOZ_WIDGET_GONK
+  *aRetVal = 255;
+#else
   NS_ConvertUTF16toUTF8 path(aPath);
   if (!VerifyRights(path)) {
     *aRetVal = EACCES;
@@ -393,6 +399,7 @@ OsFileChannelParent::RecvLutimes(const nsString& aPath,
   } else {
     *aRetVal = 0;
   }
+#endif
 
   return true;
 }
@@ -499,7 +506,7 @@ OsFileChannelParent::RecvReaddir(const nsString& aPath,
 
   DIR* d = opendir(path.get());
   if (!d) {
-    *aRetVal = *(new ReaddirResponse(files, errno));
+    *aRetVal = *(new ReaddirResponse(files, const_cast<int&>(errno)));
     return true;
   }
 
@@ -570,7 +577,7 @@ OsFileChannelParent::RecvReadlink(const nsString& aPath,
 
     int rl = readlink(path.get(), buffer, buffer_size);
     if (rl == -1) {
-      *aRetVal = *(new ReadlinkResponse(NS_LITERAL_STRING(""), errno));
+      *aRetVal = *(new ReadlinkResponse(NS_LITERAL_STRING(""), const_cast<int&>(errno)));
       return true;
     }
 

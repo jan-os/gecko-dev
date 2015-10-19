@@ -86,11 +86,6 @@ interface OsManager {
   readonly attribute long TRUNC;
 
   [Constant]
-  readonly attribute long IWRITE;
-  [Constant]
-  readonly attribute long IREAD;
-
-  [Constant]
   readonly attribute long ISUID;
   [Constant]
   readonly attribute long ISGID;

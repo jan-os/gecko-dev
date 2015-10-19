@@ -136,15 +136,26 @@ function _setAppProperties(aObj, aApp) {
 #endif
 
   let osPaths = Cc["@mozilla.org/array;1"].createInstance(Ci.nsIMutableArray);
-  let os = (aApp.manifest && aApp.manifest.permissions &&
-            aApp.manifest.permissions['posix-files'] &&
-            aApp.manifest.permissions['posix-files'].paths) || [];
-  os.forEach(function(path) {
-    let wrapper = Cc["@mozilla.org/supports-string;1"]
-                    .createInstance(Ci.nsISupportsString);
-    wrapper.data = path;
-    osPaths.appendElement(wrapper, false);
-  });
+  // So this shit don't work because manifest is not here on b2g,
+  // and i CANNOT get a property to get added to aApp here when installing
+  // from the WebIDE. I can make it happen when we read registry back
+  // but I can't get it to work everywhere. So f& it for now.
+  // Also DOMApplicationRegistry is undefined from here (although its refed)
+  // from AppsUtils so I cant get the manifest either.
+  let wrapper = Cc["@mozilla.org/supports-string;1"]
+                  .createInstance(Ci.nsISupportsString);
+  wrapper.data = 'TEMPDIR';
+  osPaths.appendElement(wrapper, false);
+
+  // let os = (aApp.manifest && aApp.manifest.permissions &&
+  //           aApp.manifest.permissions['posix-files'] &&
+  //           aApp.manifest.permissions['posix-files'].paths) || [];
+  // os.forEach(function(path) {
+  //   let wrapper = Cc["@mozilla.org/supports-string;1"]
+  //                   .createInstance(Ci.nsISupportsString);
+  //   wrapper.data = path;
+  //   osPaths.appendElement(wrapper, false);
+  // });
 
   aObj.osPaths = osPaths;
 }

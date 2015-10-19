@@ -8,6 +8,9 @@
 #include <limits>
 #include <stdio.h>
 #include <sys/stat.h>
+#ifdef MOZ_WIDGET_GONK
+#include <sys/syscall.h>
+#endif
 #include <sys/time.h>
 #include <sys/types.h>
 #include <utime.h>
@@ -337,7 +340,11 @@ OsManager::Futimes(File& aFile, const Date& aActime,
     .tv_usec = (suseconds_t)(
       ((long)floor(aModtime.TimeStamp().toDouble())) % 1000) * 1000
   };
+#ifdef MOZ_WIDGET_GONK
+  int32_t fr = syscall(__NR_utimensat, aFile.GetFd(), NULL, tv, 0);
+#else
   int32_t fr = futimes(aFile.GetFd(), tv);
+#endif
   if (fr == -1) {
     HandleErrno(errno, aRv);
   }

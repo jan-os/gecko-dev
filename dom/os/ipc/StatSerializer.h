@@ -103,21 +103,20 @@ struct ParamTraits<mozilla::dom::os::StatWrapper>
       return false;
     }
 
-    struct stat s = {
-      .st_dev = dev,
-      .st_ino = ino,
-      .st_mode = mode,
-      .st_nlink = nlink,
-      .st_uid = uid,
-      .st_gid = gid,
-      .st_rdev = rdev,
-      .st_size = size,
-      .st_blksize = blksize,
-      .st_blocks = blocks,
-      .st_atime = atime,
-      .st_mtime = mtime,
-      .st_ctime = ctime
-    };
+    struct stat s;
+    s.st_dev = dev;
+    s.st_ino = ino;
+    s.st_mode = mode;
+    s.st_nlink = nlink;
+    s.st_uid = uid;
+    s.st_gid = gid;
+    s.st_rdev = rdev;
+    s.st_size = size;
+    s.st_blksize = blksize;
+    s.st_blocks = blocks;
+    s.st_atime = atime;
+    s.st_mtime = mtime;
+    s.st_ctime = ctime;
 
     aResult->SetWrappedObject(s, error);
 

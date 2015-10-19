@@ -112,9 +112,6 @@ public:
   int32_t TRUNC() const { return O_TRUNC; }
 
   // Permission flags
-  int32_t IWRITE() const { return S_IWRITE; }
-  int32_t IREAD() const { return S_IREAD; }
-
   int32_t ISUID() const { return S_ISUID; }
   int32_t ISGID() const { return S_ISGID; }
   int32_t ISVTX() const { return S_ISVTX; }
