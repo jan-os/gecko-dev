@@ -118,11 +118,30 @@ private:
   nsTArray<nsString>& mResult;
 };
 
+
+/**
+ * A class that automatically free's path when it goes out of scope.
+ */
+class MOZ_RAII AutoFreePath {
+  private:
+    char* mPath;
+    MOZ_DECL_USE_GUARD_OBJECT_NOTIFIER
+  public:
+    explicit AutoFreePath(char* aPath MOZ_GUARD_OBJECT_NOTIFIER_PARAM)
+      : mPath(aPath)
+    {
+      MOZ_GUARD_OBJECT_NOTIFIER_INIT;
+    }
+    ~AutoFreePath() { free(mPath); }
+};
+
 bool
 OsFileChannelParent::VerifyRights(const nsACString& aPath)
 {
   // use path while calling dirname
   char* path = strdup(PromiseFlatCString(aPath).get());
+  // free path when we exit early
+  AutoFreePath freePath(path);
 
   // do a real_path call on path
   char real_path[PATH_MAX];
@@ -132,12 +151,10 @@ OsFileChannelParent::VerifyRights(const nsACString& aPath)
     // when something else, break and return false
     if (errno != ENOENT) {
       NS_WARNING("VerifyRights failed");
-      free(path);
       return false;
     }
 
     if (strlen(path) > 1024 * 1024) { // 1MB
-      free(path);
       return false;
     }
 
@@ -145,21 +162,19 @@ OsFileChannelParent::VerifyRights(const nsACString& aPath)
     nsAutoArrayPtr<char> old_path(new (fallible) char[strlen(path) + 1]);
     if (!old_path) {
       NS_WARNING("Out of memory");
-      free(path);
       return false;
     }
     strcpy(old_path, path);
 
-    path = dirname(path);
+    // result of dirname cannot be passed into free, strdup for consistency
+    path = strdup(dirname(path));
 
     if (strcmp(path, old_path) == 0) { // ended at invalid root point
-      free(path);
       return false;
     }
   }
 
   // not null? then time to check... real_path is the path we need to check
-
   NS_ConvertUTF8toUTF16 rp(real_path);
   uint32_t len = mAllowedPaths.Length();
   for (uint32_t j = 0; j < len; j++) {
